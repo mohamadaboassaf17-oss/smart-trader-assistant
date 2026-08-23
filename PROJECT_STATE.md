@@ -1,9 +1,17 @@
 # PROJECT_STATE.md — Smart Trader Assistant
 
 > Single Source of Truth for project status, written for AI agents starting fresh sessions.
-> Snapshot generated **2026-08-23** by static inspection only (no builds/tests executed during this snapshot).
-> **This directory is NOT a git repository** (verified: `Test-Path .git` = False). There is no commit history;
-> timeline claims below rely on filesystem timestamps and doc contents.
+> Snapshot generated **2026-08-23**: original audit by static inspection only (no builds/tests executed during
+> that pass); **updated later the same day after a live validation pass** — addendum below supersedes stale claims.
+> **Git:** repository initialized with remote `github.com/mohamadaboassaf17-oss/smart-trader-assistant`;
+> tree clean. Timeline sections below still rely on filesystem timestamps and doc contents.
+>
+> **Live-validation addendum (2026-08-23):** Supabase project provisioned by owner; migrations 0001–0005 APPLIED
+> and live-verified (all four M4 tables + `profiles` exist). Live auth signup works (email confirmation DISABLED —
+> acceptable dev-phase; MUST be enabled pre-production). RLS verified enforced: anon writes blocked (42501),
+> cross-user reads empty / writes impossible. `.env` holds real `VITE_SUPABASE_URL` + publishable anon key,
+> properly gitignored; no service-role key in repo. **Verdict: READY-FOR-M5.**
+> Remaining open: Vercel deployment + enabling email confirmation before production.
 
 ---
 
@@ -16,8 +24,9 @@ fully Arabic UI (RTL) with USD/local dual-currency handling under severe exchang
 (source: `PRD-trader-assistant.md` v1.2, June 2026).
 
 - **Current phase:** Beta-track MVP development. **M1–M4 complete per `tasks.md`** (ticked 2026-08-23);
-  migrations 0002–0005 authored but NOT applied (awaiting Supabase/Vercel provisioning — the open M1 item);
-  E2E validated on Chromium only. Next up: M5.
+  Supabase LIVE — migrations 0001–0005 applied & live-verified 2026-08-23 (RLS enforced; live email signup works,
+  email confirmation disabled until pre-production); E2E validated on Chromium only. **Verdict: READY-FOR-M5.**
+  Remaining open: Vercel deployment. Next up: M5.
 - **Target users:** shop owners (retail + social-commerce sellers) dealing daily in local currency + USD.
 
 | Layer         | Choice                                                                                                |
@@ -28,37 +37,39 @@ fully Arabic UI (RTL) with USD/local dual-currency handling under severe exchang
 | State         | Pinia ^3.0.4 installed and registered — zero store files exist; singleton composables used instead    |
 | Routing       | Vue Router ^5.1.0                                                                                     |
 | i18n          | Vue I18n ^9.14.5 — single locale `ar`, RTL                                                            |
-| Backend / DB  | Supabase (`@supabase/supabase-js` ^2.107.0); client returns null without env vars = offline-only mode |
-| Hosting       | Vercel (free tier) — Not yet determined (provisioning task open)                                      |
+| Backend / DB  | Supabase LIVE since 2026-08-23 (migration applied, RLS enforced); client still nulls without env vars |
+| Hosting       | Vercel (free tier) — deployment OUTSTANDING (sole open infra item)                                    |
 | IDs           | UUID v4 (`uuid` ^14.0.0 client-side; `gen_random_uuid()` default server-side)                         |
 
 ---
 
 # 2. Current Status
 
-Snapshot: 4 of 9 milestones are complete (M1–M4). Live backend validation is blocked on infrastructure
-provisioning that has never been done. Docs synced 2026-08-23 (`tasks.md`, AGENTS.md "Project Status",
-this file).
+Snapshot: 4 of 9 milestones are complete (M1–M4). **Live validation passed 2026-08-23**: Supabase provisioned,
+migrations 0001–0005 applied & live-verified, live auth signup works, RLS enforced. **Verdict: READY-FOR-M5.**
+Sole open infra item: Vercel deployment (+ enable email confirmation pre-production). Docs synced 2026-08-23
+(`tasks.md`, AGENTS.md "Project Status", this file).
 
 | Item                                                                                                                      | Status                                                                                                        | Evidence                                                                   |
 | ------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------- |
 | Tooling scaffold (Vite/Vitest/Playwright/ESLint/Prettier/pnpm scripts)                                                    | Completed                                                                                                     | package.json, root configs                                                 |
 | PWA manifest + custom Workbox SW (precache, BackgroundSync queue)                                                         | Completed                                                                                                     | vite.config.ts, src/pwa/sw.ts                                              |
 | Offline-first core: Dexie DB (14 stores), sync queue w/ backoff + dead letters, optimistic writes, connectivity detection | Completed                                                                                                     | src/services/idb/_, src/services/sync/_, src/composables/useOfflineSync.ts |
-| Auth + Onboarding + Profiles (M3)                                                                                         | Completed against mock API only; live Google OAuth / SMS OTP / RLS enforcement unvalidated                    | tasks.md M3 warning note; src/services/supabase/\*                         |
-| Daily operations (M4): Sales entry, Quick side purchase, Daily notes, Goal advisor                                        | Completed (verified 2026-08-23); migrations 0002-0005 written but NOT applied (awaiting provisioning); E2E validated on Chromium only | src/features/{sales,purchases,notes,goals}, supabase/migrations/0002-0005  |
+| Auth + Onboarding + Profiles (M3)                                                                                         | Completed; live email+password validated 2026-08-23; RLS enforced; Google OAuth / SMS OTP still unvalidated   | tasks.md M3 warning note; src/services/supabase/\*                         |
+| Daily operations (M4): Sales entry, Quick side purchase, Daily notes, Goal advisor                                        | Completed & live-verified 2026-08-23; migrations 0002-0005 applied (tables + RLS verified); E2E Chromium-only | src/features/{sales,purchases,notes,goals}, supabase/migrations/0002-0005  |
 | Suppliers / Inventory / Obligations UIs (M5/M6 scope)                                                                     | Planned — routed placeholder stubs only (25-line views each)                                                  | SuppliersView.vue, InventoryView.vue, ObligationsView.vue                  |
 | Financial dashboard (gross/net display)                                                                                   | Planned — placeholder view; net math already exists in src/utils/goal-math.ts                                 | DashboardView.vue                                                          |
 | Subscription paywall / renewal screen (M6)                                                                                | Planned — pure helpers exist (`subscriptionState`, 7-day trial), no UI lock yet                               | src/utils/subscription.ts                                                  |
-| Supabase project + Vercel provisioning                                                                                    | Blocked — open M1 task needing URL/anon key                                                                   | tasks.md line 18; `.env` absent                                            |
-| Git repository / CI execution                                                                                             | Blocked/absent — .github/workflows/ci.yml exists but repo is not initialized                                  | Test-Path .git = False                                                     |
+| Supabase project + Vercel provisioning                                                                                    | Supabase DONE & live-verified 2026-08-23 (real `.env` present, gitignored); Vercel OPEN                       | tasks.md M1 split items; live validation pass                              |
+| Git repository / CI execution                                                                                             | Repo initialized; remote configured (github.com/mohamadaboassaf17-oss/smart-trader-assistant), clean tree     | git remote -v; git status (2026-08-23)                                     |
 
 **Rough completion estimate:** ~40% overall.
 Basis: 9 milestones defined in tasks.md (M1–M9). Per tasks.md checkboxes M1–M4 done = 44%; weighting the
 remaining hardening/beta/Phase-2 work, ~40% is a fair midpoint.
 
-**Current problems / limitations:** no version control, app runs offline-only locally (no `.env` present),
-entire sync/auth stack untested against a real Supabase project.
+**Current problems / limitations:** Vercel deployment outstanding; email confirmation disabled in Supabase
+(must be enabled pre-production); Google OAuth / phone OTP providers not yet enabled or validated; sync/auth
+stack live-checked at basics level only (email+password signup + RLS), full conflict/multi-device flows unexercised.
 
 ---
 
@@ -122,7 +133,7 @@ Only genuinely done, verifiable items:
       required-per-day; net locked as sales minus side purchases (obligations deferred to M6 per goal-math.ts
       header "locked by product owner") — src/features/goals/\*, useGoalAdvisor.ts, utils/goal-math.ts (+ tests)
 - [x] Migrations 0002_sale.sql / 0003_side_purchase.sql / 0004_daily_note.sql / 0005_goal.sql: bigint cents,
-      rate snapshots, owner-only RLS policies, updated_at triggers — written, NOT applied anywhere
+      rate snapshots, owner-only RLS policies, updated_at triggers — APPLIED to live Supabase project & live-verified 2026-08-23
 - [x] E2E specs: smoke (RTL/title/nav), sync-offline, auth-onboarding, daily-entry-offline (full offline day:
       sale + side purchase + note, reload durability, online flush + badge flip, wall-clock measurement) plus
       supabase-mock helper intercepting /api-mock/\*\* — e2e/
@@ -134,12 +145,14 @@ Only genuinely done, verifiable items:
 
 Nothing is mid-edit right now (last source change: 2026-08-22 ~23:08 local time). Open work streams:
 
-1. **Live-backend bring-up (blocked)** — provision Supabase + Vercel, apply migrations 0001-0005, enable
-   Google/SMS providers, validate M3/M4 flows against the real project. Blocked on account/key creation that
-   only the owner can perform.
+1. **Vercel deployment** — sole open infrastructure item (project not yet created/deployed).
+2. **Pre-production auth hygiene** — enable email confirmation in the Supabase console (currently DISABLED;
+   dev-phase acceptable only) and enable + validate Google OAuth and phone OTP providers.
 
-M4 closure done 2026-08-23: all 12 items verified and ticked in `tasks.md` (migrations 0002–0005 remain
-unapplied pending provisioning).
+Live-backend bring-up RESOLVED 2026-08-23: Supabase provisioned, migrations 0001–0005 applied & live-verified
+(live email signup works; RLS enforced — anon writes blocked 42501, cross-user reads empty).
+
+M4 closure done 2026-08-23: all 12 items verified and ticked in `tasks.md`.
 
 ---
 
@@ -376,7 +389,7 @@ Requiring the owner's input or further research:
 2. Does a Supabase project exist? `.env` is absent and tasks.md says URL/anon key are needed — assume no,
    but confirm. Unknown until owner answers.
 3. ~~Should M4 be marked complete in tasks.md?~~ Resolved 2026-08-23: owner confirmed M4 complete;
-   all 12 items ticked (migrations 0002–0005 unapplied pending provisioning; E2E Chromium-only).
+   all 12 items ticked (migrations 0002–0005 applied & live-verified; E2E Chromium-only).
 4. Git remote choice (GitHub private?) and whether history should start fresh at init. Not yet determined.
 5. Beta merchant recruitment channel (PRD mentions ready beta testers; no list/tooling exists in repo).
    Not yet determined.

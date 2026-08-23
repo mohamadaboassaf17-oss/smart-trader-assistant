@@ -15,7 +15,8 @@
 - [x] Set up `@/` path alias in `tsconfig` and Vite
 - [x] Create target folder layout (`src/app`, `features`, `components`, `composables`, `services`, `stores`, `types`, `locales`, `pwa`, `e2e`, `supabase`)
 - [x] Add CI workflow: install → lint → typecheck → test → build
-- [ ] Provision Vercel project + Supabase project (free tier); document URLs in `.env.example` (M3 — needs Supabase URL/anon key)
+- [x] Provision Supabase project (free tier); real URL/anon key documented in `.env` (gitignored) — done & live-verified 2026-08-23 (migrations 0001–0005 applied, RLS enforced, live auth signup works)
+- [ ] Provision Vercel project (free tier) + deploy; document URL (`.env.example`/README) — split from the bundled item above; Supabase half done
 - [x] Configure `vite-plugin-pwa`: manifest (RTL, Arabic name, theme color), icons, workbox runtime caching
 - [x] Define base design tokens: colors, spacing, type scale, Arabic-friendly font (`src/style.css` + `src/styles/tokens.ts`)
 - [x] Build `<html dir="rtl" lang="ar">` root layout shell with i18n bootstrap (`AppShell.vue` + `app/i18n`)
@@ -57,10 +58,10 @@
 - [x] Vitest: auth composable, profile upsert, trial expiry check
 - [x] E2E: sign up → onboard → land on dashboard
 
-> ⚠️ M3 is implemented against the mock API and unit-tested; live validation
-> (real Google provider, SMS OTP delivery, RLS enforcement) requires the
-> Supabase project provisioning from M1's open task + enabling providers in
-> the console. Apply `supabase/migrations/0001_profiles.sql` there.
+> ✅ Live validation 2026-08-23: migration `0001_profiles.sql` APPLIED & live-verified — live email+password
+> signup works (email confirmation currently DISABLED — acceptable dev-phase, MUST be enabled pre-production);
+> RLS enforced (anon writes blocked 42501, cross-user reads empty / writes impossible).
+> ⚠️ Remaining: enable + validate Google OAuth and phone OTP providers in the Supabase console.
 
 ## M4 — Daily Operations (MVP Core)
 
@@ -77,8 +78,8 @@
 - [x] Vitest: totals math, edge cases (zero sales, missing rate, very large numbers)
 - [x] E2E: enter a day end-to-end (sale + side purchase + note) in <3 min, offline
 
-> ⚠️ Migrations 0002–0005 are authored but NOT applied — awaiting the Supabase provisioning from
-> M1's open task. E2E validated on Chromium only.
+> ✅ Migrations 0002–0005 APPLIED & live-verified 2026-08-23 — all four M4 tables exist on the live Supabase
+> project with owner-only RLS enforced (anon writes blocked 42501). E2E validated on Chromium only.
 
 ## M5 — Suppliers, Debts & Inventory
 

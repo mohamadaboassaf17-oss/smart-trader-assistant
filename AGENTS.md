@@ -4,7 +4,7 @@
 
 ## Project Status
 
-**M1–M4 complete (only the Supabase/Vercel provisioning item remains open); next up M5.** Framework locked: **Vue 3 + TypeScript**. See `tasks.md` for milestone status.
+**M1–M4 complete (Supabase provisioned + migrations 0001–0005 applied & live-verified 2026-08-23; only the Vercel deployment remains outstanding); next up M5.** Framework locked: **Vue 3 + TypeScript**. See `tasks.md` for milestone status.
 
 ## Tech Stack
 
