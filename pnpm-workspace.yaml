@@ -1,0 +1,8 @@
+# pnpm 11+ configuration for Smart Trader Assistant.
+# Single-package project — no workspaces yet, but the file is required
+# to override pnpm 11's default-deny build-script policy.
+
+allowBuilds:
+  unrs-resolver: false
+onlyBuiltDependencies:
+  - unrs-resolver
