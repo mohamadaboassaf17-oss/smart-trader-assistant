@@ -94,15 +94,25 @@ export interface Goal extends TBaseRow {
 
 export type GoalInsert = Omit<Goal, 'id' | 'createdAt' | 'updatedAt' | 'userId'>;
 
-/** A supplier (Suppliers feature). */
+/**
+ * A supplier (Suppliers feature).
+ *
+ * Outstanding balance is NOT stored here — it is derived from the
+ * supplier's goods-invoice rows (owner decision 2026-08-23). See
+ * {@link SupplierWithBalance} and `@/utils/supplier-balance`.
+ */
 export interface Supplier extends TBaseRow {
   name: string;
   phone?: string;
-  /** Running debt to this supplier, in USD cents. */
-  balanceUsdCents: number;
 }
 
 export type SupplierInsert = Omit<Supplier, 'id' | 'createdAt' | 'updatedAt' | 'userId'>;
+
+/** View model: a supplier plus its derived balance (Σ its goods invoices' debt). */
+export interface SupplierWithBalance extends Supplier {
+  /** Derived client-side via sumOutstandingBySupplier — NOT persisted. */
+  balanceUsdCents: number;
+}
 
 /** An invoice for goods received from a supplier (Purchases feature). */
 export interface GoodsInvoice extends TBaseRow {
