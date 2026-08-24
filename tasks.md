@@ -83,16 +83,21 @@
 
 ## M5 — Suppliers, Debts & Inventory
 
-- [ ] Supabase migration: `supplier` table (`id`, `user_id`, `name`, `phone`, `balance_usd_cents` (derived/computed), `created_at`, `updated_at`)
-- [ ] Supplier list, create, edit, delete; Arabic phone validation
-- [ ] Supabase migration: `goods_invoice` table (`id`, `user_id`, `supplier_id`, `date`, `total_usd_cents`, `paid_cash_usd_cents`, `debt_usd_cents` (computed), `note`)
-- [ ] Invoice entry: total + cash paid → auto-compute debt and bump supplier balance
-- [ ] Supabase migration: `product` table (`id`, `user_id`, `name`, `shelf_qty`, `warehouse_qty`, `created_at`, `updated_at`)
-- [ ] Inventory list with shelf/warehouse columns
-- [ ] Manual move dialog: shelf ↔ warehouse with optional quantity change / new product
-- [ ] Suppliers dashboard tab: list with outstanding balance, drill into invoice history
-- [ ] Vitest: invoice math (paid + debt == total), balance aggregation
-- [ ] E2E: add supplier → create invoice → verify balance update
+- [x] Supabase migration: `supplier` table (`id`, `user_id`, `name`, `phone`, created_at/updated_at) — balance NOT stored; derived from `goods_invoice` debts (owner decision 2026-08-24)
+- [x] Supplier list, create, edit, delete; Arabic phone validation
+- [x] Supabase migration: `goods_invoice` table (`id`, `user_id`, `supplier_id`, `date`, `total_usd_cents`, `paid_cash_usd_cents`, `debt_usd_cents` (computed), `note`)
+- [x] Invoice entry: total + cash paid → auto-compute debt and bump supplier balance
+- [x] Supabase migration: `product` table (`id`, `user_id`, `name`, `shelf_qty`, `warehouse_qty`, `created_at`, `updated_at`)
+- [x] Inventory list with shelf/warehouse columns
+- [x] Supabase migration: `inventory_move` table (audit trail for shelf↔warehouse moves) — added beyond original list so the synced entity has server storage
+- [x] Manual move dialog: shelf ↔ warehouse with optional quantity change / new product
+- [x] Suppliers dashboard tab: list with outstanding balance, drill into invoice history
+- [x] Vitest: invoice math (paid + debt == total), balance aggregation
+- [x] E2E: add supplier → create invoice → verify balance update
+
+> ✅ M5 code-complete & locally verified 2026-08-24 — lint/typecheck/212 unit tests/build green. ⚠️ Migrations
+> 0006–0009 committed but NOT yet applied to the live Supabase project — pending owner apply via dashboard;
+> RLS verify pending. E2E validated on Chromium only.
 
 ## M6 — Obligations, Dashboard & Subscription Paywall
 
