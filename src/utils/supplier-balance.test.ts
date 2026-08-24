@@ -64,12 +64,7 @@ describe('outstandingForSupplier', () => {
   });
 
   it('is independent of input order', () => {
-    const forward = [
-      invoice('s1', 10),
-      invoice('s2', 20),
-      invoice('s1', 30),
-      invoice('s3', 40),
-    ];
+    const forward = [invoice('s1', 10), invoice('s2', 20), invoice('s1', 30), invoice('s3', 40)];
     const reversed = [...forward].reverse();
     expect(sumOutstandingBySupplier(reversed)).toEqual(sumOutstandingBySupplier(forward));
     expect(outstandingForSupplier(reversed, 's1')).toBe(outstandingForSupplier(forward, 's1'));

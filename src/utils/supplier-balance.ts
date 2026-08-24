@@ -35,10 +35,7 @@ export function sumOutstandingBySupplier(invoices: readonly GoodsInvoice[]): Map
  * {@link sumOutstandingBySupplier} for detail views; returns 0 when the
  * supplier has no invoices at all.
  */
-export function outstandingForSupplier(
-  invoices: readonly GoodsInvoice[],
-  supplierId: Id,
-): number {
+export function outstandingForSupplier(invoices: readonly GoodsInvoice[], supplierId: Id): number {
   let total = 0;
   for (const invoice of invoices) {
     if (invoice.supplierId === supplierId) total += invoice.debtUsdCents;

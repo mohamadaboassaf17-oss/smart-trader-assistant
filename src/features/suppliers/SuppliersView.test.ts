@@ -33,10 +33,7 @@ function seedSupplier(overrides: Partial<Supplier> = {}): Supplier {
   };
 }
 
-function seedInvoice(
-  supplierId: string,
-  overrides: Partial<GoodsInvoice> = {},
-): GoodsInvoice {
+function seedInvoice(supplierId: string, overrides: Partial<GoodsInvoice> = {}): GoodsInvoice {
   seq += 1;
   const nowIso = new Date().toISOString();
   return {
@@ -106,8 +103,9 @@ describe('<SuppliersView>', () => {
 
     const dialog = wrapper.find('[data-testid="supplier-dialog"]');
     expect(dialog.exists()).toBe(true);
-    expect((wrapper.find('[data-testid="supplier-save"]').element as HTMLButtonElement).disabled)
-      .toBe(true);
+    expect(
+      (wrapper.find('[data-testid="supplier-save"]').element as HTMLButtonElement).disabled,
+    ).toBe(true);
 
     await wrapper.find('[data-testid="supplier-name"]').setValue('مورد الخضار');
     await wrapper.find('[data-testid="supplier-phone"]').setValue('70123456');
@@ -175,24 +173,20 @@ describe('<SuppliersView>', () => {
     expect(wrapper.find('[data-testid="invoice-dialog"]').exists()).toBe(true);
 
     // The editor is prefilled with this supplier.
-    const select = wrapper.find('[data-testid="invoice-supplier"]')
-      .element as HTMLSelectElement;
+    const select = wrapper.find('[data-testid="invoice-supplier"]').element as HTMLSelectElement;
     expect(select.value).toBe(seed.id);
     expect((wrapper.find('[data-testid="invoice-date"]').element as HTMLInputElement).value).toBe(
       todayIso(),
     );
 
-    await wrapper
-      .find('[data-testid="invoice-total-wrap"] input')
-      .setValue('1000'); // $1000.00 → 100000 cents
-    await wrapper
-      .find('[data-testid="invoice-paid-wrap"] input')
-      .setValue('400'); // $400.00 → 40000 cents
+    await wrapper.find('[data-testid="invoice-total-wrap"] input').setValue('1000'); // $1000.00 → 100000 cents
+    await wrapper.find('[data-testid="invoice-paid-wrap"] input').setValue('400'); // $400.00 → 40000 cents
     await settle();
 
     expect(wrapper.find('[data-testid="invoice-debt-preview"]').text()).toContain('$600.00');
-    expect((wrapper.find('[data-testid="invoice-save"]').element as HTMLButtonElement).disabled)
-      .toBe(false);
+    expect(
+      (wrapper.find('[data-testid="invoice-save"]').element as HTMLButtonElement).disabled,
+    ).toBe(false);
 
     await wrapper.find('[data-testid="invoice-save"]').trigger('click');
     await settle();

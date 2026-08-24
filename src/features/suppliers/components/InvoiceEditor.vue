@@ -12,10 +12,7 @@ import { useI18n } from 'vue-i18n';
 
 import NumberInput from '@/components/NumberInput.vue';
 import { useToast } from '@/composables/useToast';
-import {
-  useSuppliers,
-  type SupplierErrorKey,
-} from '@/features/suppliers/useSuppliers';
+import { useSuppliers, type SupplierErrorKey } from '@/features/suppliers/useSuppliers';
 import { todayIso } from '@/services/idb/exchangeRates';
 import { computeDebtUsdCents } from '@/utils/invoice-math';
 import { formatMoney } from '@/utils/money';

@@ -11,10 +11,7 @@ import { computed, onMounted, ref } from 'vue';
 import { useI18n } from 'vue-i18n';
 
 import { useToast } from '@/composables/useToast';
-import {
-  useSuppliers,
-  type SupplierErrorKey,
-} from '@/features/suppliers/useSuppliers';
+import { useSuppliers, type SupplierErrorKey } from '@/features/suppliers/useSuppliers';
 import { formatMoney } from '@/utils/money';
 
 import SupplierDetail from './components/SupplierDetail.vue';
@@ -38,8 +35,7 @@ const filtered = computed(() => {
   if (needle === '') return suppliers.value;
   return suppliers.value.filter(
     (row) =>
-      row.name.toLowerCase().includes(needle) ||
-      (row.phone ?? '').toLowerCase().includes(needle),
+      row.name.toLowerCase().includes(needle) || (row.phone ?? '').toLowerCase().includes(needle),
   );
 });
 

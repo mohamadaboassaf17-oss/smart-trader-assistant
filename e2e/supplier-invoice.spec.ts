@@ -192,9 +192,9 @@ test.describe('M5 suppliers & goods invoices', () => {
     await expect(dialog.getByTestId('invoice-debt-preview')).toContainText(EXPECTED_BALANCE);
     await dialog.getByTestId('invoice-save').click();
     await expect(dialog).toBeHidden({ timeout: 10_000 });
-    await expect(
-      page.getByTestId('supplier-detail').getByTestId('invoice-row'),
-    ).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByTestId('supplier-detail').getByTestId('invoice-row')).toBeVisible({
+      timeout: 10_000,
+    });
     await expect(badge).toHaveAttribute('aria-label', SYNC_PENDING, { timeout: 10_000 });
 
     // ── Still offline: reload proves IndexedDB-first durability ──────────
@@ -214,9 +214,9 @@ test.describe('M5 suppliers & goods invoices', () => {
     // Final online reload confirms both rows persist post-flush.
     await page.reload();
     await expect(supplierRow(page, SUPPLIER_NAME)).toBeVisible({ timeout: 15_000 });
-    await expect(
-      supplierRow(page, SUPPLIER_NAME).getByTestId('supplier-balance-badge'),
-    ).toHaveText(EXPECTED_BALANCE);
+    await expect(supplierRow(page, SUPPLIER_NAME).getByTestId('supplier-balance-badge')).toHaveText(
+      EXPECTED_BALANCE,
+    );
     await expect(page.getByTestId('sync-badge')).toHaveAttribute('aria-label', SYNC_SAVED, {
       timeout: 15_000,
     });
@@ -249,7 +249,9 @@ test.describe('M5 suppliers & goods invoices', () => {
     await expect(dialog.getByTestId('invoice-save')).toBeEnabled();
   });
 
-  test('deleting a supplier that has invoices is blocked with an Arabic toast', async ({ page }) => {
+  test('deleting a supplier that has invoices is blocked with an Arabic toast', async ({
+    page,
+  }) => {
     test.setTimeout(90_000);
 
     await interceptSupabase(page);
@@ -280,9 +282,9 @@ test.describe('M5 suppliers & goods invoices', () => {
     await list.getByTestId('supplier-confirm-delete').click();
 
     // Refused: Arabic deleteBlocked toast; confirm UI stays put.
-    await expect(
-      page.getByTestId('toast').filter({ hasText: DELETE_BLOCKED }),
-    ).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByTestId('toast').filter({ hasText: DELETE_BLOCKED })).toBeVisible({
+      timeout: 10_000,
+    });
     await expect(list.getByTestId('supplier-confirm-delete')).toBeVisible();
 
     // Cancelling restores the untouched card with its derived balance.
