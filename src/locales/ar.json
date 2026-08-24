@@ -136,7 +136,18 @@
     "title": "المخزون",
     "shelf": "الرف",
     "warehouse": "المستودع",
-    "move": "نقل"
+    "move": "نقل",
+    "name": "اسم المنتج",
+    "empty": "لا منتجات بعد",
+    "addProduct": "إضافة منتج",
+    "editProduct": "تعديل المنتج",
+    "deleteConfirm": "متأكد من حذف هذا المنتج؟",
+    "invalidName": "أدخل اسم المنتج",
+    "invalidQty": "أدخل كمية صحيحة",
+    "insufficient": "الكمية المتوفرة لا تكفي",
+    "moveToWarehouse": "من الرف إلى المستودع",
+    "moveToShelf": "من المستودع إلى الرف",
+    "quantity": "الكمية"
   },
   "obligations": {
     "title": "الالتزامات",
