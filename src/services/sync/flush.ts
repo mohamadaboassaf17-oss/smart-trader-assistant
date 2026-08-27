@@ -48,6 +48,31 @@ async function setLastPullAt(entity: EntityName, iso: string): Promise<void> {
   });
 }
 
+function isUniqueViolation(error: unknown): boolean {
+  const anyErr = error as { code?: unknown; status?: unknown; message?: unknown };
+  if (anyErr.code === '23505') return true;
+  // PostgREST may surface it as status 409 with 23505 in message
+  if (
+    anyErr.status === 409 &&
+    typeof anyErr.message === 'string' &&
+    anyErr.message.includes('23505')
+  )
+    return true;
+  if (
+    typeof anyErr.message === 'string' &&
+    (anyErr.message.includes('23505') || anyErr.message.includes('duplicate key'))
+  )
+    return true;
+  return false;
+}
+
+/** Obligation payment race is idempotent: two devices creating the same
+ * (user_id, obligation_id, month) row at month start collide on UNIQUE 23505.
+ * Silent reconcile per M7 decision — treat as success, no toast, just warn. */
+function isObligationPaymentRace(item: SyncQueueItem, error: unknown): boolean {
+  return item.entity === 'obligationPayment' && isUniqueViolation(error);
+}
+
 /** Drain every due queue item against the remote. */
 export async function pushQueue(
   remote: SyncRemoteClient,
@@ -66,6 +91,16 @@ export async function pushQueue(
         await markDone(item);
         summary.pushed += 1;
       } catch (error) {
+        if (isObligationPaymentRace(item, error)) {
+          console.warn('[sync] 23505 reconciled — obligationPayment race treated as success', {
+            entity: item.entity,
+            entityId: item.entityId,
+            month: (item.payload as { month?: string }).month,
+          });
+          await markDone(item);
+          summary.pushed += 1;
+          continue;
+        }
         const updated = await markFailure(item, error);
         summary.failed += 1;
         if (isDeadLetter(updated)) summary.dead += 1;

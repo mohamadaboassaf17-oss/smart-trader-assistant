@@ -10,7 +10,7 @@ import {
 } from '@/composables/useGoalAdvisor';
 import { db } from '@/services/idb/db';
 
-import type { Goal, Sale, SidePurchase } from '@/types/domain';
+import type { Goal, Obligation, ObligationPayment, Sale, SidePurchase } from '@/types/domain';
 
 /**
  * IndexedDB callbacks fire on macrotasks, so plain flushPromises is not
@@ -36,8 +36,10 @@ function mountAdvisor(): { api: GoalAdvisorApi; stop: () => void } {
 
 const PAST_MONTH = '2024-07'; // never equals the runtime "current" month
 
+let seq = 0;
+const nowIso = new Date().toISOString();
+
 function saleRow(id: string, date: string, totalUsdCents: number): Sale {
-  const nowIso = new Date().toISOString();
   return {
     id,
     createdAt: nowIso,
@@ -51,7 +53,6 @@ function saleRow(id: string, date: string, totalUsdCents: number): Sale {
 }
 
 function purchaseRow(id: string, date: string, amountUsdCents: number): SidePurchase {
-  const nowIso = new Date().toISOString();
   return {
     id,
     createdAt: nowIso,
@@ -65,7 +66,6 @@ function purchaseRow(id: string, date: string, amountUsdCents: number): SidePurc
 }
 
 function goalRow(month: string, targetUsdCents: number): Goal {
-  const nowIso = new Date().toISOString();
   return {
     id: `goal-${month}`,
     createdAt: nowIso,
@@ -75,10 +75,43 @@ function goalRow(month: string, targetUsdCents: number): Goal {
   };
 }
 
+function obligationRow(overrides: Partial<Obligation> = {}): Obligation {
+  seq += 1;
+  return {
+    id: overrides.id ?? `${String(seq).padStart(8, '0')}-cccc-dddd-eeee-ffffffffffff`,
+    createdAt: nowIso,
+    updatedAt: nowIso,
+    name: 'إيجار',
+    amountUsdCents: 30_000,
+    dueDay: 1,
+    active: true,
+    ...overrides,
+  };
+}
+
+function paymentRow(
+  id: string,
+  obligationId: string,
+  payMonth: string,
+  status: ObligationPayment['status'],
+): ObligationPayment {
+  return {
+    id,
+    createdAt: nowIso,
+    updatedAt: nowIso,
+    obligationId,
+    month: payMonth,
+    status,
+  };
+}
+
 beforeEach(async () => {
+  seq = 0;
   await db.sale.clear();
   await db.sidePurchase.clear();
   await db.goal.clear();
+  await db.obligation.clear();
+  await db.obligationPayment.clear();
   await db.syncQueue.clear();
 });
 
@@ -96,7 +129,7 @@ describe('daysInMonthIso', () => {
 });
 
 describe('<useGoalAdvisor>', () => {
-  it('computes net as Σsales − ΣsidePurchases for the selected month only', async () => {
+  it('computes net as Σsales − ΣsidePurchases − Σpaid obligations for the selected month only', async () => {
     const current = currentMonthIso();
     await db.sale.bulkPut([
       saleRow('s1', `${current}-05`, 30_000),
@@ -111,7 +144,7 @@ describe('<useGoalAdvisor>', () => {
     const { api, stop } = mountAdvisor();
     await settle();
 
-    expect(api.netUsdCents.value).toBe(40_000);
+    expect(api.netUsdCents.value).toBe(40_000); // no paid obligations this month
     // No target yet → gap math stays null and the bar shows zero.
     expect(api.targetUsdCents.value).toBeNull();
     expect(api.remainingUsdCents.value).toBeNull();
@@ -122,6 +155,42 @@ describe('<useGoalAdvisor>', () => {
     await settle();
 
     expect(api.netUsdCents.value).toBe(49_000); // 99_000 − 50_000
+    stop();
+  });
+
+  it('subtracts PAID obligations of the month from net (PRD §6.6)', async () => {
+    const current = currentMonthIso();
+
+    // Mixed case: sales $1,000 − side purchases $200 − PAID obligations
+    // $300 ⇒ net $500 (50_000 cents).
+    await db.sale.put(saleRow('s1', `${current}-05`, 100_000));
+    await db.sidePurchase.put(purchaseRow('p1', `${current}-06`, 20_000));
+
+    const rent = obligationRow({ id: 'ob-rent', amountUsdCents: 30_000 });
+    const power = obligationRow({
+      id: 'ob-power',
+      name: 'كهرباء',
+      amountUsdCents: 10_000,
+    });
+    await db.obligation.bulkPut([rent, power]);
+    await db.obligationPayment.bulkPut([
+      paymentRow('pay-rent', rent.id, current, 'paid'), // counts
+      paymentRow('pay-power', power.id, current, 'pending'), // status only — excluded
+      paymentRow('pay-orphan', 'ghost-id', current, 'paid'), // deleted parent — skipped
+      paymentRow('pay-old', rent.id, PAST_MONTH, 'paid'), // other month — excluded
+    ]);
+
+    const { api, stop } = mountAdvisor();
+    await settle();
+
+    expect(api.netUsdCents.value).toBe(50_000);
+
+    // Switching months re-joins against THAT month's payments only.
+    await db.sale.put(saleRow('s2', `${PAST_MONTH}-02`, 40_000));
+    api.month.value = PAST_MONTH;
+    await settle();
+
+    expect(api.netUsdCents.value).toBe(10_000); // 40_000 − 30_000 (rent paid)
     stop();
   });
 

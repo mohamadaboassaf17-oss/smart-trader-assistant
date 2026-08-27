@@ -137,6 +137,16 @@ watch(selectedDate, (date) => {
 });
 void loadDay(today);
 
+// ── M7 timing instrumentation: measures time-to-input for the 3-min target (PRD §8) ──
+if (typeof performance !== 'undefined' && typeof performance.mark === 'function') {
+  performance.mark('sales-view-mounted');
+  try {
+    sessionStorage.setItem('sales-entry-start', String(Date.now()));
+  } catch {
+    /* ignore storage errors */
+  }
+}
+
 /** Persist the daily rate: composable path for today, direct store otherwise. */
 async function persistRate(date: string, rate: number): Promise<Result<void, Error>> {
   if (date === today) {
@@ -178,6 +188,25 @@ async function onSave(): Promise<void> {
     if (result.ok) {
       existingEntry.value = row;
       savedTotalUsdCents.value = row.totalUsdCents;
+      // M7: log entry duration for the <3 min target; stored for E2E assertion
+      if (typeof performance !== 'undefined' && typeof performance.mark === 'function') {
+        try {
+          performance.mark('sales-entry-saved');
+          const startRaw = sessionStorage.getItem('sales-entry-start');
+          const start = startRaw ? Number(startRaw) : Date.now();
+          const durationSec = (Date.now() - start) / 1000;
+          console.info('[perf] sales entry duration', {
+            date: selectedDate.value,
+            durationSec: Math.round(durationSec),
+            withinTarget: durationSec < 180,
+          });
+          (
+            window as unknown as { __SALES_ENTRY_DURATION_SEC?: number }
+          ).__SALES_ENTRY_DURATION_SEC = durationSec;
+        } catch {
+          /* ignore */
+        }
+      }
       toast.success(t('toasts.savedLocally'));
       await refreshHistory();
     } else {

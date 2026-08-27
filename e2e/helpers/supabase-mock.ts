@@ -52,7 +52,11 @@ async function replySession(route: Route): Promise<void> {
   });
 }
 
-export async function interceptSupabase(page: Page): Promise<void> {
+export async function interceptSupabase(
+  page: Page,
+  /** When set, GET …/rest/v1/profile serves this canned row (M6 specs). */
+  profile?: { status: 'trial' | 'active' | 'expired'; expiresInDays?: number },
+): Promise<void> {
   await page.route('**/api-mock/**', async (route) => {
     const req = route.request();
     const method = req.method();
@@ -76,6 +80,30 @@ export async function interceptSupabase(page: Page): Promise<void> {
       await route.fulfill({ status: 204 });
       return;
     }
+    if (profile && method === 'GET' && url.pathname.endsWith('/rest/v1/profile')) {
+      // PostgREST returns snake_case rows; `remote.ts` maps keys to camelCase.
+      // updated_at is pushed ~1min into the future so it always beats the
+      // client row in the pull's stale-rejection check.
+      const base = Date.now();
+      const row = {
+        id: USER_ID,
+        created_at: new Date(base - 60_000).toISOString(),
+        updated_at: new Date(base + 60_000).toISOString(),
+        country: 'LB',
+        local_currency: 'LBP',
+        subscription_status: profile.status,
+        subscription_expires_at:
+          profile.expiresInDays === undefined
+            ? null
+            : new Date(base + profile.expiresInDays * 86_400_000).toISOString(),
+      };
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify([row]),
+      });
+      return;
+    }
     // PostgREST (profiles, sales, …)
     await route.fulfill({ status: 201, contentType: 'application/json', body: '[]' });
   });
@@ -87,6 +115,12 @@ export async function interceptSupabase(page: Page): Promise<void> {
  */
 export async function signUpAndOnboard(page: Page): Promise<void> {
   await page.goto('/');
+  // M8: unauthenticated `/` now shows the marketing landing; follow its CTA to /auth.
+  // Older specs assumed `/` → `/auth` redirect — keep both paths green.
+  const landingCta = page.getByTestId('landing-cta-primary');
+  if (await landingCta.isVisible({ timeout: 2000 }).catch(() => false)) {
+    await landingCta.click();
+  }
   await expect(page).toHaveURL(/\/auth/, { timeout: 15_000 });
   await page.getByTestId('auth-toggle-mode').click();
   await page.getByTestId('auth-email').fill(E2E_EMAIL);
@@ -97,7 +131,7 @@ export async function signUpAndOnboard(page: Page): Promise<void> {
   await page.getByTestId('ob-country-lb').click();
   await page.getByTestId('ob-confirm').click();
 
-  await expect(page).toHaveURL(/\/$/, { timeout: 15_000 });
+  await expect(page).toHaveURL(/\/(dashboard)?$/, { timeout: 15_000 });
   await expect(page.getByRole('heading', { name: 'لوحة التحكم', level: 1 })).toBeVisible({
     timeout: 15_000,
   });

@@ -272,7 +272,7 @@ async function onConfirmRemove(product: Product): Promise<void> {
 }
 
 .iv__btn {
-  min-block-size: calc(var(--tap-target-min) - 8px);
+  min-block-size: var(--tap-target-min);
   padding-inline: var(--space-3);
   border: none;
   border-radius: var(--radius-md);
@@ -294,7 +294,7 @@ async function onConfirmRemove(product: Product): Promise<void> {
 
 .iv__fab {
   position: fixed;
-  inset-block-end: calc(var(--header-height) + var(--space-5));
+  inset-block-end: calc(var(--header-height) + var(--space-5) + env(safe-area-inset-bottom, 0px));
   inset-inline-end: var(--space-4);
   z-index: 20;
   display: inline-flex;

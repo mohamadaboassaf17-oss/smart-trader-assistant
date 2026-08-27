@@ -9,7 +9,7 @@
  * item — the newest payload wins, so rapid edits don't pile up.
  *
  * Ownership: `userId` is stamped into outgoing payloads AT ENQUEUE TIME
- * from the live auth session (migrations 0002–0005 declare `user_id not null`
+ * from the live auth session (migrations 0002–0011 declare `user_id not null`
  * and RLS checks `auth.uid() = user_id`). Stamping here keeps the payload
  * complete + immutable across flush restarts; a protected entity enqueued
  * while a configured remote exists but no session does is rejected instead
@@ -30,16 +30,22 @@ export const MAX_RETRIES = 8;
 export type SyncOp = SyncQueueItem['op'];
 
 /**
- * Entities whose tables declare `user_id uuid not null` (migrations 0002–
- * 0005). Future tables join this set when their migrations land; `profile`
- * stays out because its PK already is the user id and it has no user_id
- * column.
+ * Entities whose tables declare `user_id uuid not null` (migrations
+ * 0002–0011). Complete as of M6 — every remaining table carries the column;
+ * `profile` stays out because its PK already is the user id and it has no
+ * user_id column.
  */
 const ENTITIES_REQUIRING_USER_ID: ReadonlySet<EntityName> = new Set<EntityName>([
   'sale',
   'sidePurchase',
   'dailyNote',
   'goal',
+  'supplier',
+  'goodsInvoice',
+  'product',
+  'inventoryMove',
+  'obligation',
+  'obligationPayment',
 ]);
 
 function nowIso(): string {

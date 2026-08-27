@@ -17,14 +17,25 @@ export default defineConfig({
     coverage: {
       provider: 'v8',
       reporter: ['text', 'html', 'lcov'],
-      include: ['src/**/*.{ts,tsx,vue}'],
+      // M7 gate: only business-logic layers are unit-covered to ≥80%
+      include: [
+        'src/services/**/*.{ts,vue}',
+        'src/composables/**/*.{ts,vue}',
+        'src/utils/**/*.{ts,vue}',
+      ],
       exclude: [
         'src/**/*.test.*',
         'src/**/*.spec.*',
-        'src/**/main.ts',
-        'src/types/**',
-        'src/test/**',
+        // Supabase wiring is e2e-covered (needs live project)
+        'src/services/supabase/client.ts',
+        'src/services/supabase/auth.ts',
+        'src/services/sync/remote.ts',
       ],
+      thresholds: {
+        lines: 80,
+        branches: 70,
+        functions: 75,
+      },
     },
   },
 });

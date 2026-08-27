@@ -13,6 +13,11 @@
 import { createRouter, createWebHistory, type RouteRecordRaw } from 'vue-router';
 
 import { ensureAuthReady, useAuth } from '@/composables/useAuth';
+import {
+  initSubscriptionWatch,
+  isLockExemptRoute,
+  useSubscription,
+} from '@/composables/useSubscription';
 
 const routes: RouteRecordRaw[] = [
   {
@@ -29,6 +34,12 @@ const routes: RouteRecordRaw[] = [
   },
   {
     path: '/',
+    name: 'home',
+    component: () => import('@/app/views/HomeView.vue'),
+    meta: { title: 'مساعد ذكي للتاجر', requiresAuth: false, requiresOnboarding: false },
+  },
+  {
+    path: '/dashboard',
     name: 'dashboard',
     component: () => import('@/app/layouts/AppShell.vue'),
     meta: { title: 'لوحة التحكم', showInNav: true, featureView: 'dashboard' },
@@ -76,6 +87,12 @@ const routes: RouteRecordRaw[] = [
     meta: { title: 'الأهداف', showInNav: true, featureView: 'goals' },
   },
   {
+    path: '/subscription',
+    name: 'subscription',
+    component: () => import('@/features/subscription/RenewalView.vue'),
+    meta: { title: 'تجديد الاشتراك', requiresAuth: true, requiresOnboarding: true },
+  },
+  {
     path: '/:pathMatch(.*)*',
     redirect: '/',
   },
@@ -88,6 +105,8 @@ export const router = createRouter({
 
 router.beforeEach(async (to) => {
   await ensureAuthReady();
+  // M6: populate lock/grace refs once (idempotent) before any decision.
+  await initSubscriptionWatch();
 
   const needsAuth = to.meta.requiresAuth !== false;
   const needsProfile = to.meta.requiresOnboarding !== false;
@@ -99,15 +118,29 @@ router.beforeEach(async (to) => {
   if (needsAuth && !user) {
     return { name: 'auth', query: to.fullPath === '/' ? {} : { redirect: to.fullPath } };
   }
-  if (!needsAuth && user) {
-    // Signed-in users never see /auth.
-    return { path: '/' };
+  // M8: home `/` is the public landing for unauthenticated users.
+  // Authenticated users are sent to /dashboard (or onboarding if needed).
+  if (to.name === 'home' && user && !profile) {
+    return { name: 'onboarding' };
+  }
+  if (to.name === 'home' && user && profile) {
+    return { name: 'dashboard' };
+  }
+  if (to.name === 'auth' && user) {
+    // Signed-in users never see /auth — send them to the right home.
+    return { name: 'dashboard' };
   }
   if (needsProfile && user && !profile) {
     return { name: 'onboarding' };
   }
   if (to.name === 'onboarding' && user && profile) {
-    return { path: '/' };
+    return { name: 'dashboard' };
+  }
+  // M6 subscription lock (PRD §4.5): purely navigational — engages only
+  // after a confirmed-online sync proved expiry; offline devices without
+  // such a check keep full access.
+  if (user && profile && !isLockExemptRoute(to.name) && useSubscription().state.locked) {
+    return { name: 'subscription' };
   }
   return true;
 });

@@ -169,6 +169,23 @@ svg {
   max-width: 100%;
 }
 
+/* Skip link — keyboard users jump to main */
+.skip-link {
+  position: absolute;
+  inset-block-start: var(--space-2);
+  inset-inline-start: var(--space-2);
+  z-index: 100;
+  padding: var(--space-2) var(--space-4);
+  background: var(--color-brand-700);
+  color: var(--color-text-inverse);
+  border-radius: var(--radius-md);
+  transform: translateY(-200%);
+  transition: transform 120ms ease;
+}
+.skip-link:focus {
+  transform: translateY(0);
+}
+
 /* Focus visible */
 :focus-visible {
   outline: 2px solid var(--color-brand-600);

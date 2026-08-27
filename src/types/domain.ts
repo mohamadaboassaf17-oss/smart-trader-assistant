@@ -193,6 +193,12 @@ export interface Profile extends TBaseRow {
   subscriptionStatus: 'trial' | 'active' | 'expired';
   /** ISO 8601 string; undefined while subscription is on trial/expired. */
   subscriptionExpiresAt?: string;
+  /** Stripe customer id (cus_...) — set by webhook (M8). */
+  stripeCustomerId?: string;
+  /** Stripe subscription id (sub_...) — current $20/mo subscription (M8). */
+  stripeSubscriptionId?: string;
+  /** Stripe price id (price_...) — the $20/mo price (M8). */
+  stripePriceId?: string;
 }
 
 export type ProfileInsert = Omit<Profile, 'id' | 'createdAt' | 'updatedAt' | 'userId'>;

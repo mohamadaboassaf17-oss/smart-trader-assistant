@@ -238,7 +238,8 @@ async function onSave(): Promise<void> {
 <style scoped>
 .qsp__fab {
   position: fixed;
-  inset-block-end: calc(var(--header-height) + var(--space-5));
+  /* Thumb-zone: bottom 1/3 + safe-area for notched phones */
+  inset-block-end: calc(var(--header-height) + var(--space-5) + env(safe-area-inset-bottom, 0px));
   inset-inline-end: var(--space-4);
   z-index: 20;
   display: inline-flex;

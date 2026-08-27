@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { db } from '@/services/idb/db';
 
@@ -14,7 +14,40 @@ import {
   pendingCount,
 } from './queue';
 
-import type { Product, Sale } from '@/types/domain';
+import type { ObligationPayment, Product, Sale } from '@/types/domain';
+
+// Controllable Supabase stand-in: null = offline-only build; a fake client
+// exercises the queue's auth-ownership gate (configured remote ± session).
+const supabaseMock = vi.hoisted(() => ({
+  client: null as unknown,
+}));
+
+vi.mock('@/services/supabase/client', () => ({
+  getSupabase: () => supabaseMock.client,
+  resetSupabase(): void {
+    supabaseMock.client = null;
+  },
+}));
+
+interface FakeAuthClient {
+  auth: { getSession(): Promise<{ data: { session: { user: { id: string } } | null } }> };
+}
+
+/** Configure a remote whose session carries `userId`. */
+function useRemoteWithSession(userId: string): void {
+  const client: FakeAuthClient = {
+    auth: { getSession: async () => ({ data: { session: { user: { id: userId } } } }) },
+  };
+  supabaseMock.client = client;
+}
+
+/** Configure a remote that is reachable but has no session. */
+function useRemoteWithoutSession(): void {
+  const client: FakeAuthClient = {
+    auth: { getSession: async () => ({ data: { session: null } }) },
+  };
+  supabaseMock.client = client;
+}
 
 function makeSale(id: string, totalUsdCents = 1000): Sale {
   return {
@@ -40,8 +73,21 @@ function makeProduct(id: string): Product {
   };
 }
 
+function makeObligationPayment(id: string): ObligationPayment {
+  return {
+    id,
+    createdAt: '2026-08-21T10:00:00.000Z',
+    updatedAt: '2026-08-21T10:00:00.000Z',
+    obligationId: 'o1',
+    month: '2026-08',
+    status: 'paid',
+    paidAt: '2026-08-21T10:00:00.000Z',
+  };
+}
+
 describe('sync queue', () => {
   beforeEach(async () => {
+    supabaseMock.client = null;
     await Promise.all(db.tables.map((t) => t.clear()));
   });
 
@@ -100,5 +146,20 @@ describe('sync queue', () => {
     await enqueueUpsert(makeSale('new'), 'sale', { createdAt: '2026-08-21T11:00:00.000Z' });
     const due = await listDue(new Date());
     expect(due.map((d) => d.entityId)).toEqual(['old', 'new']);
+  });
+
+  it('rejects an obligationPayment without an authenticated owner', async () => {
+    useRemoteWithoutSession();
+    await expect(enqueueUpsert(makeObligationPayment('op1'), 'obligationPayment')).rejects.toThrow(
+      /no authenticated user/,
+    );
+    expect(await pendingCount()).toBe(0);
+  });
+
+  it('stamps and enqueues an obligationPayment when a session owns it', async () => {
+    useRemoteWithSession('u1');
+    const item = await enqueueUpsert(makeObligationPayment('op2'), 'obligationPayment');
+    expect(await pendingCount()).toBe(1);
+    expect(item.payload['userId']).toBe('u1');
   });
 });

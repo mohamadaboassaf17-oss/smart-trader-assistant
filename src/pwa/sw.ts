@@ -19,7 +19,7 @@ import {
   precacheAndRoute,
 } from 'workbox-precaching';
 import { NavigationRoute, registerRoute } from 'workbox-routing';
-import { CacheFirst } from 'workbox-strategies';
+import { CacheFirst, NetworkOnly } from 'workbox-strategies';
 
 declare const self: ServiceWorkerGlobalScope & { __WB_MANIFEST: unknown[] };
 
@@ -39,14 +39,15 @@ registerRoute(
 );
 
 // Failed Supabase mutations → Background Sync queue (Chromium+).
+// NetworkOnly is correct here: CacheFirst would cache failed POSTs and
+// mask network errors. BackgroundSyncPlugin replays only when online.
 const mutationQueue = new BackgroundSyncPlugin('trader-mutations', {
   // Retention is in minutes: keep failed mutations for up to 7 days.
   maxRetentionTime: 7 * 24 * 60,
 });
 registerRoute(
   /\/rest\/v1\//,
-  new CacheFirst({
-    cacheName: 'api-mutations',
+  new NetworkOnly({
     plugins: [mutationQueue],
   }),
   'POST',

@@ -9,8 +9,11 @@
  * beyond any real shop's monthly volume. BigInt is deliberately not
  * introduced; callers feeding values past that range own the overflow risk.
  *
- * Net definition (locked by product owner): `net = sales − side purchases`
- * ONLY. Obligations land in M6 and will extend `monthlyNetUsdCents`.
+ * Net definition (M6): `net = sales − side purchases − paid obligations`.
+ * Historical note: originally locked by the product owner to
+ * `sales − side purchases` ONLY, with obligations explicitly deferred to
+ * M6. M6 now extends `monthlyNetUsdCents` with an optional third array
+ * (defaulting to `[]`) so pre-M6 call sites keep compiling unchanged.
  */
 
 interface CalendarParts {
@@ -27,15 +30,19 @@ function assertCents(value: number, label: string): void {
 }
 
 /**
- * Monthly net in USD cents: `Σ sales − Σ side purchases`.
+ * Monthly net in USD cents:
+ * `Σ sales − Σ side purchases − Σ paid obligations`.
  *
  * Negative results are legitimate (a losing month) and are never clamped.
  * Inputs are treated as readonly and are not mutated; empty arrays
- * contribute 0, so `([], []) → 0`.
+ * contribute 0, so `([], []) → 0`. The obligations argument is optional
+ * (defaults to `[]`) — pre-M6 call sites that omit it behave exactly as
+ * before.
  */
 export function monthlyNetUsdCents(
   saleTotalUsdCents: readonly number[],
   sidePurchaseUsdCents: readonly number[],
+  paidObligationUsdCents: readonly number[] = [],
 ): number {
   let net = 0;
   for (const cents of saleTotalUsdCents) {
@@ -44,6 +51,10 @@ export function monthlyNetUsdCents(
   }
   for (const cents of sidePurchaseUsdCents) {
     assertCents(cents, 'monthlyNetUsdCents: side purchase');
+    net -= cents;
+  }
+  for (const cents of paidObligationUsdCents) {
+    assertCents(cents, 'monthlyNetUsdCents: paid obligation');
     net -= cents;
   }
   return net;

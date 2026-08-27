@@ -14,6 +14,7 @@
 
 import { readonly, ref } from 'vue';
 
+import { evaluateAfterSync } from '@/composables/useSubscription';
 import { getSupabase } from '@/services/supabase/client';
 import { isOnline as isNetworkOnline, subscribeConnectivity } from '@/services/sync/connectivity';
 import { pullChanges, pushQueue } from '@/services/sync/flush';
@@ -90,6 +91,10 @@ export async function flushOfflineQueue(): Promise<void> {
       offlineSyncState.lastError.value = null;
       const touched = pushRes.value.pushed + pullRes.value.pulled;
       if (touched > 0) offlineSyncState.lastSyncedAt.value = new Date().toISOString();
+      // M6 (PRD §4.4–§4.5): pull just merged fresh rows (incl. the profile)
+      // — a confirmed-ONLINE cycle is the ONLY thing allowed to flip the
+      // subscription lock. Failure/offline paths never touch it.
+      await evaluateAfterSync();
     }
   } finally {
     offlineSyncState.syncing.value = false;

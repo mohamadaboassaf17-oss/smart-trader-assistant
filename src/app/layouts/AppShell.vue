@@ -1,32 +1,41 @@
 <script setup lang="ts">
-import { computed, markRaw, type Component } from 'vue';
+import { computed, defineAsyncComponent, markRaw, watch, type Component } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useRoute, useRouter } from 'vue-router';
 
+import SubscriptionBanner from '@/components/SubscriptionBanner.vue';
 import SyncBadge from '@/components/SyncBadge.vue';
-import DashboardView from '@/features/dashboard/DashboardView.vue';
-import GoalsView from '@/features/goals/GoalsView.vue';
-import InventoryView from '@/features/inventory/InventoryView.vue';
-import NotesView from '@/features/notes/NotesView.vue';
-import ObligationsView from '@/features/obligations/ObligationsView.vue';
-import PurchasesView from '@/features/purchases/PurchasesView.vue';
-import SalesView from '@/features/sales/SalesView.vue';
-import SuppliersView from '@/features/suppliers/SuppliersView.vue';
+import { isLockExemptRoute, useSubscription } from '@/composables/useSubscription';
+
+// Feature views are code-split lazily (defineAsyncComponent): the shell
+// bundle carries layout only and each view loads on demand — fixes the
+// known bundle bloat (PROJECT_STATE §9 #6).
+const VIEW_BY_NAME: Record<string, Component> = markRaw({
+  dashboard: defineAsyncComponent(() => import('@/features/dashboard/DashboardView.vue')),
+  sales: defineAsyncComponent(() => import('@/features/sales/SalesView.vue')),
+  purchases: defineAsyncComponent(() => import('@/features/purchases/PurchasesView.vue')),
+  suppliers: defineAsyncComponent(() => import('@/features/suppliers/SuppliersView.vue')),
+  inventory: defineAsyncComponent(() => import('@/features/inventory/InventoryView.vue')),
+  obligations: defineAsyncComponent(() => import('@/features/obligations/ObligationsView.vue')),
+  notes: defineAsyncComponent(() => import('@/features/notes/NotesView.vue')),
+  goals: defineAsyncComponent(() => import('@/features/goals/GoalsView.vue')),
+});
 
 const { t } = useI18n();
 const route = useRoute();
 const router = useRouter();
+const subscription = useSubscription();
 
-const VIEW_BY_NAME: Record<string, Component> = markRaw({
-  dashboard: DashboardView,
-  sales: SalesView,
-  purchases: PurchasesView,
-  suppliers: SuppliersView,
-  inventory: InventoryView,
-  obligations: ObligationsView,
-  notes: NotesView,
-  goals: GoalsView,
-});
+// Lock engaging mid-session (post-sync expiry confirmation) evicts the user
+// to /subscription immediately instead of waiting for their next navigation.
+watch(
+  () => subscription.state.locked,
+  (locked) => {
+    if (locked && !isLockExemptRoute(route.name)) {
+      void router.replace({ name: 'subscription' });
+    }
+  },
+);
 
 const tabs = computed(() =>
   router
@@ -50,12 +59,15 @@ const FeatureView = computed<Component | null>(() => {
 
 <template>
   <div class="shell">
+    <a href="#main-content" class="skip-link">{{ t('common.skipToContent') }}</a>
     <header class="shell__header" role="banner">
       <h1 class="shell__title">{{ currentTitle }}</h1>
       <SyncBadge class="shell__sync" data-testid="sync-badge" />
     </header>
 
-    <main class="shell__main" role="main">
+    <SubscriptionBanner />
+
+    <main id="main-content" class="shell__main" role="main" tabindex="-1">
       <component :is="FeatureView" v-if="FeatureView" />
     </main>
 
@@ -109,7 +121,7 @@ const FeatureView = computed<Component | null>(() => {
 .shell__main {
   flex: 1 1 auto;
   padding: var(--space-4);
-  padding-block-end: calc(var(--header-height) + var(--space-4));
+  padding-block-end: calc(var(--header-height) + var(--space-4) + env(safe-area-inset-bottom, 0px));
 }
 
 .shell__nav {
@@ -124,6 +136,7 @@ const FeatureView = computed<Component | null>(() => {
   margin-inline: auto;
   overflow-x: auto;
   scrollbar-width: none;
+  padding-block-end: env(safe-area-inset-bottom, 0px);
 }
 
 .shell__nav::-webkit-scrollbar {

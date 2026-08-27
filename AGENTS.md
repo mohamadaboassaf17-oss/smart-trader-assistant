@@ -4,22 +4,23 @@
 
 ## Project Status
 
-**M1–M5 complete (code-complete; migrations 0001–0005 applied & live-verified 2026-08-23, migrations 0006–0009 committed pending live apply; Vercel deployment remains outstanding); next up M6.** Framework locked: **Vue 3 + TypeScript**. See `tasks.md` for milestone status.
+**M1–M8 complete (code-complete 2026-08-28: M7 Beta Hardening SW NetworkOnly + 23505 reconcile + a11y 44px, M8 Stripe $20/mo via Supabase Edge Functions billing@smart-tajir.com + custom domain smart-tajir.com via Cloudflare/Namecheap + Vercel 308 redirect + VITE_PAYMENT_MODE=dual + LandingView; 315 Vitest; migrations 0006–0012 committed pending live apply; Vercel free fallback smart-trader-assistant.vercel.app; Google OAuth enabled, Phone OTP deferred).** Framework locked: **Vue 3 + TypeScript**. See `tasks.md` for milestone status.
 
 ## Tech Stack
 
-| Layer         | Choice                                                            |
-| ------------- | ----------------------------------------------------------------- |
-| Frontend      | Vue 3 + TypeScript + `<script setup>`                             |
-| Build tool    | Vite + `vite-plugin-pwa` (Workbox SW generated on `pnpm build`)   |
-| Local storage | IndexedDB via **Dexie** (chosen over raw `idb`) + Service Workers |
-| State         | Pinia (setup-syntax stores)                                       |
-| Routing       | Vue Router                                                        |
-| i18n          | Vue I18n (single locale `ar` for MVP; `en` later)                 |
-| Backend / DB  | Supabase (PostgreSQL + Auth) — wired in M3+                       |
-| Hosting       | Vercel (free tier) — project to be provisioned                    |
-| IDs           | UUID v4 for all records (`uuid` package)                          |
-| UI language   | Arabic, RTL — `dir="rtl"` set on `<html>`                         |
+| Layer         | Choice                                                                                                                                |
+| ------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
+| Frontend      | Vue 3 + TypeScript + `<script setup>`                                                                                                 |
+| Build tool    | Vite + `vite-plugin-pwa` (Workbox SW generated on `pnpm build`)                                                                       |
+| Local storage | IndexedDB via **Dexie** (chosen over raw `idb`) + Service Workers                                                                     |
+| State         | Pinia (setup-syntax stores)                                                                                                           |
+| Routing       | Vue Router                                                                                                                            |
+| i18n          | Vue I18n (single locale `ar` for MVP; `en` later)                                                                                     |
+| Backend / DB  | Supabase (PostgreSQL + Auth) — wired in M3+; Edge Functions for Stripe webhooks (M8)                                                  |
+| Hosting       | Vercel (free tier) — `smart-tajir.com` (primary) + `smart-trader-assistant.vercel.app` (redirect 308); DNS on Cloudflare/Namecheap    |
+| Payments      | Stripe $20/mo — publishable `VITE_STRIPE_PUBLISHABLE_KEY` + price `VITE_STRIPE_PRICE_ID`; `VITE_PAYMENT_MODE=dual` (Stripe+Whish/OMT) |
+| IDs           | UUID v4 for all records (`uuid` package)                                                                                              |
+| UI language   | Arabic, RTL — `dir="rtl"` set on `<html>`                                                                                             |
 
 ## Build / Lint / Test Commands
 

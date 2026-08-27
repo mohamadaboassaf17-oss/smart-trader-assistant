@@ -23,7 +23,7 @@ const { t } = useI18n();
 </script>
 
 <template>
-  <div class="dual-input" role="group">
+  <div class="dual-input" role="group" :aria-label="t('sales.title')">
     <NumberInput
       v-model="usd"
       :label="t('sales.cashUsd')"

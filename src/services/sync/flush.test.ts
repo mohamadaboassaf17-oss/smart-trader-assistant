@@ -6,7 +6,7 @@ import { pullChanges, pushQueue } from './flush';
 import { enqueueUpsert } from './queue';
 
 import type { SyncRemoteClient } from './remote';
-import type { EntityName } from '@/types/domain';
+import type { EntityName, ObligationPayment } from '@/types/domain';
 
 interface FakeRemoteOptions {
   upsertError?: Error;
@@ -82,6 +82,39 @@ describe('pushQueue', () => {
     const item = (await db.syncQueue.toArray())[0];
     expect(item?.retryCount).toBe(1);
     expect(item?.lastError).toBe('network down');
+  });
+
+  it('silently reconciles 23505 obligationPayment race as success', async () => {
+    // ObligationPayment duplicate (two devices same month) — 23505
+    await enqueueUpsert(
+      {
+        id: 'op-race-1',
+        createdAt: 'x',
+        updatedAt: 'x',
+        obligationId: 'obl-1',
+        month: '2026-08',
+        status: 'pending',
+      } as unknown as ObligationPayment,
+      'obligationPayment',
+    );
+    const raceError = Object.assign(new Error('duplicate key value violates unique constraint'), {
+      code: '23505',
+    });
+    const remote = makeFakeRemote({ upsertError: raceError });
+
+    const res = await pushQueue(remote);
+    // Treated as pushed, not failed — no retry, no dead letter, no toast
+    expect(res).toMatchObject({ ok: true, value: { pushed: 1, failed: 0 } });
+    expect(await db.syncQueue.count()).toBe(0);
+  });
+
+  it('does not reconcile 23505 for non-obligationPayment entities', async () => {
+    await enqueueUpsert({ id: 's3', createdAt: 'x', updatedAt: 'x' }, 'sale');
+    const raceError = Object.assign(new Error('duplicate key'), { code: '23505' });
+    const remote = makeFakeRemote({ upsertError: raceError });
+    const res = await pushQueue(remote);
+    expect(res).toMatchObject({ ok: true, value: { pushed: 0, failed: 1 } });
+    expect(await db.syncQueue.count()).toBe(1);
   });
 });
 

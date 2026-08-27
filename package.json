@@ -20,6 +20,7 @@
     "test:e2e:ui": "playwright test --ui"
   },
   "dependencies": {
+    "@stripe/stripe-js": "^9.14.0",
     "@supabase/supabase-js": "^2.107.0",
     "dexie": "^4.4.3",
     "pinia": "^3.0.4",

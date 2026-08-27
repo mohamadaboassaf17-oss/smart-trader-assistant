@@ -67,6 +67,16 @@ export function ensureAuthReady(): Promise<void> {
   return readyPromise;
 }
 
+/**
+ * M6: re-read the current user's profile row from IndexedDB into state
+ * (used after a sync cycle merged fresh remote rows).
+ */
+export async function refreshProfile(): Promise<void> {
+  const user = state.user.value;
+  if (!user) return;
+  await hydrateUser(user);
+}
+
 /** Test/dev reset. */
 export function resetAuthState(): void {
   readyPromise = null;
@@ -88,6 +98,8 @@ export interface AuthApi {
     readonly profile: Profile | null;
   };
   ensureReady: () => Promise<void>;
+  /** M6: re-read the current user's profile from IndexedDB into state. */
+  refreshProfile: () => Promise<void>;
   /** Complete onboarding: create the trial profile locally + queue upsert. */
   completeOnboarding: (country: CountryCode) => Promise<Result<Profile, Error>>;
   signInEmail: (email: string, password: string) => Promise<Result<User, AuthErrorKey>>;
@@ -135,6 +147,7 @@ export function useAuth(): AuthApi {
   return {
     state: readonly(state) as unknown as AuthApi['state'],
     ensureReady: ensureAuthReady,
+    refreshProfile,
     completeOnboarding,
     signInEmail: (email, password) =>
       runAuth(() => signInWithPassword(email, password) as ReturnType<() => AuthSvcResult>),

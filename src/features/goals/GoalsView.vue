@@ -4,9 +4,10 @@
  *
  * Monthly USD target setter (stored as integer cents, one row per month,
  * upsert semantics) plus interactive progress: net = sales − side purchases
- * for the selected month, remaining gap and required-per-day. Negative nets
- * are legitimate: the bar stays at zero while the negative value shows as
- * text. All math lives in `useGoalAdvisor`; the template only renders.
+ * − PAID obligations for the selected month, remaining gap and
+ * required-per-day. Negative nets are legitimate: the bar stays at zero
+ * while the negative value shows as text. All math lives in
+ * `useGoalAdvisor`; the template only renders.
  */
 import { computed, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';

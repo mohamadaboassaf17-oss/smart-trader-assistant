@@ -22,7 +22,11 @@ test.describe('M3 auth & onboarding', () => {
     await interceptSupabase(page);
 
     await page.goto('/');
-    // Guard bounces unauthenticated visitors to /auth.
+    // M8: `/` shows landing for unauthenticated; follow CTA to /auth if present.
+    const landingCta = page.getByTestId('landing-cta-primary');
+    if (await landingCta.isVisible({ timeout: 2000 }).catch(() => false)) {
+      await landingCta.click();
+    }
     await expect(page).toHaveURL(/\/auth/, { timeout: 15_000 });
     await expect(page.getByTestId('auth-email')).toBeVisible();
 

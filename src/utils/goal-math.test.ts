@@ -29,6 +29,25 @@ describe('monthlyNetUsdCents', () => {
     expect(() => monthlyNetUsdCents([1.5], [])).toThrow(RangeError);
     expect(() => monthlyNetUsdCents([], [0.5])).toThrow(RangeError);
   });
+
+  it('behaves identically when obligations are omitted or empty (M6 default)', () => {
+    expect(monthlyNetUsdCents([1_000, 250], [80])).toBe(1_170);
+    expect(monthlyNetUsdCents([1_000, 250], [80], [])).toBe(1_170);
+  });
+
+  it('subtracts paid obligations from the net', () => {
+    expect(monthlyNetUsdCents([2_000], [300], [150])).toBe(1_550);
+    expect(monthlyNetUsdCents([], [], [400])).toBe(-400);
+  });
+
+  it('never clamps a losing month that includes obligations', () => {
+    expect(monthlyNetUsdCents([100], [50], [200])).toBe(-150);
+  });
+
+  it('rejects non-integer obligation cents', () => {
+    expect(() => monthlyNetUsdCents([], [], [1.5])).toThrow(RangeError);
+    expect(() => monthlyNetUsdCents([], [], [10, 0.25])).toThrow(RangeError);
+  });
 });
 
 describe('remainingToTargetUsdCents', () => {

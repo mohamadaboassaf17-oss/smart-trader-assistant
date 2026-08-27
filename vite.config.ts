@@ -26,7 +26,13 @@ export default defineConfig({
         dir: 'rtl',
         start_url: '/',
         scope: '/',
-        icons: [{ src: 'favicon.svg', sizes: 'any', type: 'image/svg+xml' }],
+        icons: [
+          { src: 'favicon.svg', sizes: 'any', type: 'image/svg+xml' },
+          { src: 'favicon.svg', sizes: '192x192', type: 'image/svg+xml', purpose: 'any' },
+          { src: 'favicon.svg', sizes: '512x512', type: 'image/svg+xml', purpose: 'any maskable' },
+        ],
+        categories: ['business', 'finance'],
+        screenshots: [],
       },
       injectManifest: {
         globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2}'],

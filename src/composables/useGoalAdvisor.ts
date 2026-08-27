@@ -1,10 +1,13 @@
 /**
  * useGoalAdvisor — monthly goal setter + net-progress wiring (PRD §6.8).
  *
- * The net definition is locked by product decision: for the selected month,
- * `net = Σ sale.totalUsdCents − Σ sidePurchase.amountUsdCents`, read from
- * IndexedDB. All calendar and gap math is delegated to the locked pure
- * helpers in `@/utils/goal-math` — nothing is reimplemented here.
+ * Net definition (M6): for the selected month,
+ * `net = Σ sale.totalUsdCents − Σ sidePurchase.amountUsdCents − Σ PAID
+ * obligation amounts`, read local-first from IndexedDB. Paid obligations
+ * ride the shared `useObligations()` singleton (same source as the
+ * Obligations tab) and are valued through the payments→obligation-amount
+ * join in `@/utils/paid-obligations`. All calendar and gap math is
+ * delegated to the locked pure helpers in `@/utils/goal-math`.
  *
  * Goal upsert semantics: one row per month. Saving reuses the existing
  * row's UUID when present (so the sync queue's `[entity+entityId]` dedupe
@@ -14,6 +17,7 @@
 import { v4 as uuidv4 } from 'uuid';
 import { computed, ref, watch } from 'vue';
 
+import { useObligations } from '@/composables/useObligations';
 import { useOfflineSync } from '@/composables/useOfflineSync';
 import { db } from '@/services/idb/db';
 import { todayIso } from '@/services/idb/exchangeRates';
@@ -24,6 +28,7 @@ import {
   remainingToTargetUsdCents,
   requiredPerDayUsdCents as requiredPerDay,
 } from '@/utils/goal-math';
+import { paidObligationAmountsForMonth } from '@/utils/paid-obligations';
 
 import type { Goal } from '@/types/domain';
 
@@ -49,6 +54,7 @@ async function latestGoalFor(month: string): Promise<Goal | null> {
 
 export function useGoalAdvisor() {
   const { save } = useOfflineSync();
+  const { obligations, payments, refresh: refreshObligations } = useObligations();
 
   /** Selected viewing/planning month, `YYYY-MM`; defaults to the current. */
   const month = ref(currentMonthIso());
@@ -59,11 +65,16 @@ export function useGoalAdvisor() {
   const targetUsdCents = ref<number | null>(null);
   const saleTotalsUsdCents = ref<number[]>([]);
   const sidePurchaseTotalsUsdCents = ref<number[]>([]);
+  const paidObligationTotalsUsdCents = ref<number[]>([]);
 
   const isCurrentMonth = computed(() => month.value === currentMonthIso());
 
   const netUsdCents = computed(() =>
-    monthlyNetUsdCents(saleTotalsUsdCents.value, sidePurchaseTotalsUsdCents.value),
+    monthlyNetUsdCents(
+      saleTotalsUsdCents.value,
+      sidePurchaseTotalsUsdCents.value,
+      paidObligationTotalsUsdCents.value,
+    ),
   );
 
   /**
@@ -124,12 +135,22 @@ export function useGoalAdvisor() {
         return;
       }
 
+      // Paid obligations come from the shared obligations singleton; its
+      // refresh() re-reads both stores and never throws (failures are
+      // logged inside the composable).
+      await refreshObligations();
+
       saleTotalsUsdCents.value = salesResult.value
         .filter((sale) => sale.date.startsWith(prefix))
         .map((sale) => sale.totalUsdCents);
       sidePurchaseTotalsUsdCents.value = purchasesResult.value
         .filter((purchase) => purchase.date.startsWith(prefix))
         .map((purchase) => purchase.amountUsdCents);
+      paidObligationTotalsUsdCents.value = paidObligationAmountsForMonth(
+        obligations.value,
+        payments.value,
+        month.value,
+      );
       targetUsdCents.value = goalResult.value?.targetUsdCents ?? null;
     } finally {
       loading.value = false;
