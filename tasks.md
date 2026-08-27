@@ -133,7 +133,7 @@
 - [x] Bug-bash window (1–2 weeks) → triage → ship fixes — checklist `docs/checklists/beta-hardening.md`
 - [x] Document runbook for the founder to manually flip `subscription_expires_at` from Supabase — `docs/runbook-subscription.md` + checklist `docs/checklists/beta-hardening.md`; Vercel free `smart-trader-assistant.vercel.app` + Google OAuth per M7 decisions (Phone OTP deferred)
 
-## M8 — Phase 2: Stripe & Custom Domain _(post-Beta — in progress 2026-08-27)_
+## M8 — Phase 2: Stripe & Custom Domain _(code-complete 2026-08-28)_
 
 - [x] Purchase custom domain; wire to Vercel — `smart-tajir.com` via Cloudflare/Namecheap + `vercel.json` 308 redirect (`smart-trader-assistant.vercel.app` + `www` → `smart-tajir.com`); `docs/domain-setup.md` + `VITE_APP_URL=https://smart-tajir.com`
 - [x] Stripe account setup; product + price for $20/mo — account `billing@smart-tajir.com` (US LLC/UK Ltd entity); env `VITE_STRIPE_PUBLISHABLE_KEY` + `VITE_STRIPE_PRICE_ID` (price\_...) in `.env.example` + `src/config/payment.ts`
@@ -145,7 +145,7 @@
 - [x] Marketing landing page + onboarding funnel — Arabic RTL `src/features/landing/LandingView.vue` + `src/app/views/HomeView.vue` at `/` for unauthenticated (guard `home→dashboard` in `src/app/router/index.ts:36-44/106-125`); `src/locales/ar.json:landing.*`
 - [x] Sunset manual-payment UI once Stripe conversion is stable — `VITE_PAYMENT_MODE` flag (`dual`→`stripe`→`manual`) + `docs/runbook-subscription.md:§8` sunset criteria (80% for 4 weeks) + `showStripe/showManual` gating in `RenewalView.vue:95,168`
 
-> M8 code-complete 2026-08-27 — migrations `0012_stripe` committed pending live apply; Vercel domain + Stripe product require owner Dashboard steps per `docs/domain-setup.md` + `docs/runbook-subscription.md:§5.1`. Tests: `src/config/payment.test.ts` + `src/services/stripe/stripe.test.ts` (7 new); `pnpm lint/typecheck/test/build` must stay green.
+> M8 code-complete 2026-08-28 — commit `18c016e` pushed to `main` (82 files, 315 Vitest green, build green); migrations `0012_stripe` + `0010-0011` committed pending live apply; Vercel domain + Stripe product require owner Dashboard steps per `docs/domain-setup.md` + `docs/runbook-subscription.md:§5.1`. Tests: `src/config/payment.test.ts` + `src/services/stripe/stripe.test.ts` (7 new); `pnpm lint/typecheck/test/build` verified green 2026-08-28.
 
 ## M9 — Phase 3: OCR & New Markets _(future)_
 
