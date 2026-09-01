@@ -22,7 +22,9 @@ import { v4 as uuidv4 } from 'uuid';
 import { ref, type Ref } from 'vue';
 
 import { useOfflineSync } from '@/composables/useOfflineSync';
+import { obligationInsertSchema } from '@/schemas';
 import { db } from '@/services/idb/db';
+import { getSupabase } from '@/services/supabase/client';
 import { err, ok, tryAsync, type Result } from '@/types/result';
 import { currentMonthKey, pendingPaymentsForMonth } from '@/utils/obligation-schedule';
 
@@ -62,16 +64,49 @@ const inactiveObligations = ref<Obligation[]>([]);
 const payments = ref<ObligationPayment[]>([]);
 const loading = ref(false);
 
+async function getAuthContext(): Promise<{ uid: string | null; isOfflineOnly: boolean }> {
+  const client = getSupabase();
+  if (!client) return { uid: null, isOfflineOnly: true };
+  try {
+    const session = (await client.auth.getSession()).data.session;
+    if (session?.user.id) return { uid: session.user.id, isOfflineOnly: false };
+  } catch {
+    // offline
+  }
+  return { uid: null, isOfflineOnly: false };
+}
+
+async function getCurrentUid(): Promise<string | null> {
+  const ctx = await getAuthContext();
+  return ctx.uid;
+}
+
 /** Read both stores and rebuild the split lists. */
 async function load(): Promise<void> {
   loading.value = true;
   try {
-    const obRes = await tryAsync(() => db.obligation.toArray());
+    const ctx = await getAuthContext();
+    if (!ctx.isOfflineOnly && !ctx.uid) {
+      obligations.value = [];
+      activeObligations.value = [];
+      inactiveObligations.value = [];
+      payments.value = [];
+      return;
+    }
+    const obRes = await tryAsync(() =>
+      ctx.isOfflineOnly || !ctx.uid
+        ? db.obligation.toArray()
+        : db.obligation.where('userId').equals(ctx.uid).toArray(),
+    );
     if (!obRes.ok) {
       console.error('[obligations] obligation query failed', { message: obRes.error.message });
       return;
     }
-    const payRes = await tryAsync(() => db.obligationPayment.toArray());
+    const payRes = await tryAsync(() =>
+      ctx.isOfflineOnly || !ctx.uid
+        ? db.obligationPayment.toArray()
+        : db.obligationPayment.where('userId').equals(ctx.uid).toArray(),
+    );
     if (!payRes.ok) {
       console.error('[obligations] payment query failed', { message: payRes.error.message });
       return;
@@ -96,15 +131,31 @@ async function load(): Promise<void> {
  */
 async function ensurePendingRows(): Promise<void> {
   const month = currentMonthKey();
+  const ctx = await getAuthContext();
+  const uid = ctx.uid;
+  // Offline-only build: still generate pending rows for legacy rows without userId
+  if (!ctx.isOfflineOnly && !uid) return;
 
-  const obRes = await tryAsync(() => db.obligation.toArray());
+  const obRes = await tryAsync(() =>
+    ctx.isOfflineOnly || !uid
+      ? db.obligation.toArray()
+      : db.obligation.where('userId').equals(uid).toArray(),
+  );
   if (!obRes.ok) {
     console.error('[obligations] generation aborted: obligation query failed', {
       message: obRes.error.message,
     });
     return;
   }
-  const payRes = await tryAsync(() => db.obligationPayment.where('month').equals(month).toArray());
+  const payRes = await tryAsync(() =>
+    ctx.isOfflineOnly || !uid
+      ? db.obligationPayment.where('month').equals(month).toArray()
+      : db.obligationPayment
+          .where('userId')
+          .equals(uid)
+          .filter((r) => r.month === month)
+          .toArray(),
+  );
   if (!payRes.ok) {
     console.error('[obligations] generation aborted: payment query failed', {
       month,
@@ -118,11 +169,11 @@ async function ensurePendingRows(): Promise<void> {
   for (const draft of pendingPaymentsForMonth(obRes.value, month)) {
     if (existing.has(draft.obligationId)) continue;
     const nowIso = new Date().toISOString();
-    // userId stays undefined until auth lands — mirrors useSuppliers.
     const row: ObligationPayment = {
       id: uuidv4(),
       createdAt: nowIso,
       updatedAt: nowIso,
+      userId: uid ?? undefined,
       obligationId: draft.obligationId,
       month: draft.month,
       status: 'pending',
@@ -142,21 +193,25 @@ async function saveObligation(
   input: ObligationInput,
   existing?: Obligation,
 ): Promise<Result<void, ObligationErrorKey>> {
-  const name = input.name.trim();
-  if (name === '') return err('obligations.invalidName');
-  if (!Number.isInteger(input.amountUsdCents) || input.amountUsdCents <= 0)
+  // Central Zod validation before db.obligation.put (P1.5) — name/amount
+  const parsed = obligationInsertSchema.safeParse(input);
+  if (!parsed.success) {
+    const issue = parsed.error.issues[0]?.path[0];
+    if (issue === 'name') return err('obligations.invalidName');
+    if (issue === 'amountUsdCents') return err('obligations.invalidAmount');
+    if (issue === 'dueDay') return err('obligations.invalidDueDay');
     return err('obligations.invalidAmount');
-  if (!Number.isInteger(input.dueDay) || input.dueDay < 1 || input.dueDay > 31)
-    return err('obligations.invalidDueDay');
+  }
+  const name = parsed.data.name;
 
   const nowIso = new Date().toISOString();
   const row: Obligation = existing
     ? {
         ...existing,
         name,
-        amountUsdCents: input.amountUsdCents,
-        dueDay: input.dueDay,
-        active: input.active,
+        amountUsdCents: parsed.data.amountUsdCents,
+        dueDay: parsed.data.dueDay,
+        active: parsed.data.active,
         updatedAt: nowIso,
       }
     : {
@@ -164,9 +219,9 @@ async function saveObligation(
         createdAt: nowIso,
         updatedAt: nowIso,
         name,
-        amountUsdCents: input.amountUsdCents,
-        dueDay: input.dueDay,
-        active: input.active,
+        amountUsdCents: parsed.data.amountUsdCents,
+        dueDay: parsed.data.dueDay,
+        active: parsed.data.active,
       };
 
   const result = await useOfflineSync().save('obligation', row);
@@ -185,9 +240,24 @@ async function saveObligation(
  * ops racing the parent's tombstone across devices.
  */
 async function removeObligation(row: Obligation): Promise<Result<void, ObligationErrorKey>> {
-  const childRes = await tryAsync(() =>
-    db.obligationPayment.where('obligationId').equals(row.id).toArray(),
-  );
+  const uid = await getCurrentUid();
+  const childRes = await tryAsync(async () => {
+    if (uid) {
+      try {
+        return await db.obligationPayment
+          .where('[userId+obligationId]')
+          .equals([uid, row.id])
+          .toArray();
+      } catch {
+        return await db.obligationPayment
+          .where('userId')
+          .equals(uid)
+          .filter((r) => r.obligationId === row.id)
+          .toArray();
+      }
+    }
+    return db.obligationPayment.where('obligationId').equals(row.id).toArray();
+  });
   if (!childRes.ok) {
     console.error('[obligations] payment lookup failed', {
       id: row.id,
@@ -224,13 +294,31 @@ async function removeObligation(row: Obligation): Promise<Result<void, Obligatio
  * marking paid still materializes it — the defensive path.
  */
 async function markPaid(payment: ObligationPayment): Promise<Result<void, Error>> {
-  const lookup = await tryAsync(() =>
-    db.obligationPayment
+  const uid = await getCurrentUid();
+  const lookup = await tryAsync(async () => {
+    if (uid) {
+      try {
+        const byCompound = await db.obligationPayment
+          .where('[userId+obligationId]')
+          .equals([uid, payment.obligationId])
+          .filter((r) => r.month === payment.month)
+          .first();
+        if (byCompound) return byCompound;
+      } catch {
+        // fallback to userId filter
+      }
+      return db.obligationPayment
+        .where('userId')
+        .equals(uid)
+        .filter((r) => r.obligationId === payment.obligationId && r.month === payment.month)
+        .first();
+    }
+    return db.obligationPayment
       .where('obligationId')
       .equals(payment.obligationId)
       .and((row) => row.month === payment.month)
-      .first(),
-  );
+      .first();
+  });
   if (!lookup.ok) {
     console.error('[obligations] payment lookup failed', {
       obligationId: payment.obligationId,

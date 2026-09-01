@@ -65,6 +65,7 @@ export function formatAmount(cents: number, locale = 'en-US'): string {
 
 /** Format an amount with its currency symbol/code. */
 export function formatMoney(cents: number, currency: CurrencyCode, locale = 'en-US'): string {
+  if (!Number.isInteger(cents)) throw new RangeError('formatMoney: expected integer cents');
   return new Intl.NumberFormat(locale, {
     style: 'currency',
     currency,
@@ -86,6 +87,8 @@ export function formatDualCurrency(
   rate: number,
   locale: string = 'ar-LB',
 ): string {
+  if (!Number.isInteger(usdCents)) throw new RangeError('formatDualCurrency: expected integer cents');
+  if (!Number.isFinite(rate) || rate <= 0) throw new RangeError('formatDualCurrency: invalid rate');
   const usdStr = formatMoney(usdCents, 'USD', locale);
   const localCents = Math.round(usdCents * rate);
   const localStr = formatMoney(localCents, local, locale);

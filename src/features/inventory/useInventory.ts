@@ -12,7 +12,9 @@ import { v4 as uuidv4 } from 'uuid';
 import { ref, type Ref } from 'vue';
 
 import { useOfflineSync } from '@/composables/useOfflineSync';
+import { inventoryMoveSchema, productInsertSchema } from '@/schemas';
 import { db } from '@/services/idb/db';
+import { getSupabase } from '@/services/supabase/client';
 import { err, ok, tryAsync, type Result } from '@/types/result';
 import { applyInventoryMove, type InventoryMoveError } from '@/utils/inventory-math';
 
@@ -55,11 +57,37 @@ function moveErrorKey(error: InventoryMoveError): InventoryErrorKey {
 const products = ref<Product[]>([]);
 const loading = ref(false);
 
+async function getAuthContext(): Promise<{ uid: string | null; isOfflineOnly: boolean }> {
+  const client = getSupabase();
+  if (!client) return { uid: null, isOfflineOnly: true };
+  try {
+    const session = (await client.auth.getSession()).data.session;
+    if (session?.user.id) return { uid: session.user.id, isOfflineOnly: false };
+  } catch {
+    // offline
+  }
+  return { uid: null, isOfflineOnly: false };
+}
+
+async function getCurrentUid(): Promise<string | null> {
+  const ctx = await getAuthContext();
+  return ctx.uid;
+}
+
 /** Read the store and rebuild the name-sorted list. */
 async function load(): Promise<void> {
   loading.value = true;
   try {
-    const rows = await tryAsync(() => db.product.toArray());
+    const ctx = await getAuthContext();
+    if (!ctx.isOfflineOnly && !ctx.uid) {
+      products.value = [];
+      return;
+    }
+    const rows = await tryAsync(() =>
+      ctx.isOfflineOnly || !ctx.uid
+        ? db.product.toArray()
+        : db.product.where('userId').equals(ctx.uid).toArray(),
+    );
     if (!rows.ok) {
       console.error('[inventory] product query failed', { message: rows.error.message });
       return;
@@ -74,13 +102,20 @@ async function saveProduct(
   input: ProductInput,
   existing?: Product,
 ): Promise<Result<void, InventoryErrorKey>> {
-  const name = input.name.trim();
-  if (name === '') return err('inventory.invalidName');
-
-  const shelfQty = input.shelfQty ?? 0;
-  const warehouseQty = input.warehouseQty ?? 0;
-  if (!Number.isInteger(shelfQty) || shelfQty < 0) return err('inventory.invalidQty');
-  if (!Number.isInteger(warehouseQty) || warehouseQty < 0) return err('inventory.invalidQty');
+  // Central Zod validation before db.product.put (P1.5) — name/qty
+  const parsed = productInsertSchema.safeParse({
+    name: input.name,
+    shelfQty: input.shelfQty ?? 0,
+    warehouseQty: input.warehouseQty ?? 0,
+  });
+  if (!parsed.success) {
+    const issue = parsed.error.issues[0]?.path[0];
+    if (issue === 'name') return err('inventory.invalidName');
+    return err('inventory.invalidQty');
+  }
+  const name = parsed.data.name;
+  const shelfQty = parsed.data.shelfQty;
+  const warehouseQty = parsed.data.warehouseQty;
 
   const nowIso = new Date().toISOString();
   const row: Product = existing
@@ -110,7 +145,15 @@ async function removeProduct(product: Product): Promise<Result<void, InventoryEr
 }
 
 async function moveStock(input: StockMoveInput): Promise<Result<void, InventoryErrorKey>> {
-  const found = await tryAsync(() => db.product.get(input.productId));
+  // Central Zod validation before put (P1.5) — quantity
+  const parsedMove = inventoryMoveSchema.safeParse(input);
+  if (!parsedMove.success) return err('inventory.invalidQty');
+  const uid = await getCurrentUid();
+  const found = await tryAsync(async () => {
+    const row = await db.product.get(input.productId);
+    if (row && uid && row.userId !== uid) return undefined;
+    return row;
+  });
   if (!found.ok) {
     console.error('[inventory] product lookup failed', {
       id: input.productId,
@@ -167,7 +210,21 @@ async function moveStock(input: StockMoveInput): Promise<Result<void, InventoryE
 
 /** That product's moves, newest first (audit trail). */
 async function movesFor(productId: string): Promise<InventoryMove[]> {
-  const rows = await db.inventoryMove.where('productId').equals(productId).toArray();
+  const uid = await getCurrentUid();
+  let rows: InventoryMove[];
+  if (uid) {
+    try {
+      rows = await db.inventoryMove.where('[userId+productId]').equals([uid, productId]).toArray();
+    } catch {
+      rows = await db.inventoryMove
+        .where('userId')
+        .equals(uid)
+        .filter((r) => r.productId === productId)
+        .toArray();
+    }
+  } else {
+    rows = await db.inventoryMove.where('productId').equals(productId).toArray();
+  }
   return [...rows].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
 }
 

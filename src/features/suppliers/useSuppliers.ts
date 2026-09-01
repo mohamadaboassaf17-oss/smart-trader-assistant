@@ -17,7 +17,9 @@ import { v4 as uuidv4 } from 'uuid';
 import { ref, type Ref } from 'vue';
 
 import { useOfflineSync } from '@/composables/useOfflineSync';
+import { supplierInsertSchema } from '@/schemas';
 import { db } from '@/services/idb/db';
+import { getSupabase } from '@/services/supabase/client';
 import { err, ok, tryAsync, type Result } from '@/types/result';
 import { computeDebtUsdCents } from '@/utils/invoice-math';
 import { validateMerchantPhone } from '@/utils/phone';
@@ -53,16 +55,46 @@ function compareRows(a: SupplierWithBalance, b: SupplierWithBalance): number {
 const suppliers = ref<SupplierWithBalance[]>([]);
 const loading = ref(false);
 
+async function getAuthContext(): Promise<{ uid: string | null; isOfflineOnly: boolean }> {
+  const client = getSupabase();
+  if (!client) return { uid: null, isOfflineOnly: true };
+  try {
+    const session = (await client.auth.getSession()).data.session;
+    if (session?.user.id) return { uid: session.user.id, isOfflineOnly: false };
+  } catch {
+    // offline or no session — fall through
+  }
+  return { uid: null, isOfflineOnly: false };
+}
+
+async function getCurrentUid(): Promise<string | null> {
+  const ctx = await getAuthContext();
+  return ctx.uid;
+}
+
 /** Read both stores and rebuild the derived list. */
 async function load(): Promise<void> {
   loading.value = true;
   try {
-    const supplierRows = await tryAsync(() => db.supplier.toArray());
+    const ctx = await getAuthContext();
+    if (!ctx.isOfflineOnly && !ctx.uid) {
+      suppliers.value = [];
+      return;
+    }
+    const supplierRows = await tryAsync(() =>
+      ctx.isOfflineOnly || !ctx.uid
+        ? db.supplier.toArray()
+        : db.supplier.where('userId').equals(ctx.uid).toArray(),
+    );
     if (!supplierRows.ok) {
       console.error('[suppliers] supplier query failed', { message: supplierRows.error.message });
       return;
     }
-    const invoiceRows = await tryAsync(() => db.goodsInvoice.toArray());
+    const invoiceRows = await tryAsync(() =>
+      ctx.isOfflineOnly || !ctx.uid
+        ? db.goodsInvoice.toArray()
+        : db.goodsInvoice.where('userId').equals(ctx.uid).toArray(),
+    );
     if (!invoiceRows.ok) {
       console.error('[suppliers] invoice query failed', { message: invoiceRows.error.message });
       return;
@@ -80,8 +112,10 @@ async function saveSupplier(
   input: { name: string; phone?: string },
   existing?: Supplier,
 ): Promise<Result<void, SupplierErrorKey>> {
-  const name = input.name.trim();
-  if (name === '') return err('suppliers.invalidName');
+  // Central Zod validation before db.supplier.put (P1.5)
+  const parsed = supplierInsertSchema.safeParse({ name: input.name });
+  if (!parsed.success) return err('suppliers.invalidName');
+  const name = parsed.data.name;
 
   const rawPhone = input.phone?.trim() ?? '';
   let phone: string | undefined;
@@ -110,9 +144,20 @@ async function saveSupplier(
 
 async function removeSupplier(supplier: Supplier): Promise<Result<void, SupplierErrorKey>> {
   // Guard: a supplier with invoice history cannot be deleted.
-  const referenced = await tryAsync(() =>
-    db.goodsInvoice.where('supplierId').equals(supplier.id).count(),
-  );
+  const uid = await getCurrentUid();
+  const referenced = await tryAsync(() => {
+    if (uid && supplier.userId) {
+      return db.goodsInvoice.where('[userId+supplierId]').equals([uid, supplier.id]).count();
+    }
+    if (uid) {
+      return db.goodsInvoice
+        .where('userId')
+        .equals(uid)
+        .filter((r) => r.supplierId === supplier.id)
+        .count();
+    }
+    return db.goodsInvoice.where('supplierId').equals(supplier.id).count();
+  });
   if (!referenced.ok) {
     console.error('[suppliers] invoice lookup failed', {
       id: supplier.id,
@@ -133,7 +178,21 @@ async function removeSupplier(supplier: Supplier): Promise<Result<void, Supplier
 
 /** That supplier's invoices, newest business day first (then newest entry). */
 async function invoicesFor(supplierId: string): Promise<GoodsInvoice[]> {
-  const rows = await db.goodsInvoice.where('supplierId').equals(supplierId).toArray();
+  const uid = await getCurrentUid();
+  let rows: GoodsInvoice[];
+  if (uid) {
+    try {
+      rows = await db.goodsInvoice.where('[userId+supplierId]').equals([uid, supplierId]).toArray();
+    } catch {
+      rows = await db.goodsInvoice
+        .where('userId')
+        .equals(uid)
+        .filter((r) => r.supplierId === supplierId)
+        .toArray();
+    }
+  } else {
+    rows = await db.goodsInvoice.where('supplierId').equals(supplierId).toArray();
+  }
   return [...rows].sort(
     (a, b) => b.date.localeCompare(a.date) || b.createdAt.localeCompare(a.createdAt),
   );

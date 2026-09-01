@@ -37,3 +37,7 @@ coverage.lcov
 *.sw?
 
 nul
+
+# supabase temp
+supabase/.temp/
+

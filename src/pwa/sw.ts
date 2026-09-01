@@ -19,7 +19,7 @@ import {
   precacheAndRoute,
 } from 'workbox-precaching';
 import { NavigationRoute, registerRoute } from 'workbox-routing';
-import { CacheFirst, NetworkOnly } from 'workbox-strategies';
+import { CacheFirst, NetworkFirst, NetworkOnly } from 'workbox-strategies';
 
 declare const self: ServiceWorkerGlobalScope & { __WB_MANIFEST: unknown[] };
 
@@ -30,12 +30,29 @@ cleanupOutdatedCaches();
 registerRoute(new NavigationRoute(createHandlerBoundToURL('index.html')));
 
 // Static assets not covered by the precache manifest (e.g. runtime imports).
+// Same-origin only: prevents cross-origin image/font cache pollution.
 registerRoute(
-  ({ request }) => request.destination === 'image' || request.destination === 'font',
+  ({ request, url }) =>
+    url.origin === self.location.origin &&
+    (request.destination === 'image' || request.destination === 'font'),
   new CacheFirst({
     cacheName: 'runtime-assets',
     plugins: [new ExpirationPlugin({ maxEntries: 60, maxAgeSeconds: 30 * 24 * 60 * 60 })],
   }),
+);
+
+// Supabase GET → NetworkFirst with 3s timeout for offline grace.
+// Short cache (5 min / 30 entries) avoids serving stale reads while allowing
+// recent GETs to resolve offline. Dexie remains primary source-of-truth;
+// this is a fallback for direct fetch consumers when offline.
+registerRoute(
+  ({ url }) => url.pathname.startsWith('/rest/v1/') && url.origin === self.location.origin,
+  new NetworkFirst({
+    cacheName: 'supabase-get',
+    networkTimeoutSeconds: 3,
+    plugins: [new ExpirationPlugin({ maxEntries: 30, maxAgeSeconds: 5 * 60 })],
+  }),
+  'GET',
 );
 
 // Failed Supabase mutations → Background Sync queue (Chromium+).

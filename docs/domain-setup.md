@@ -13,8 +13,9 @@
 2. انسخ السجلات التي يظهرها Vercel:
    - Apex: `A 76.76.21.21` أو `CNAME cname.vercel-dns.com` (حسب اختيار Vercel الحالي).
    - `www`: `CNAME cname.vercel-dns.com`.
-3. أضفها في Cloudflare DNS (Proxy **OFF** للتحقق الأول، ثم ON بعد نجاح التحقق).
-4. انتظر التحقق (عادة <5 دقائق) + شهادة TLS تلقائية من Vercel/Let's Encrypt.
+3. في Cloudflare → SSL/TLS → Overview: ضع `SSL/TLS → Full (Strict)`، وفعّل `Always Use HTTPS ON` و `Automatic HTTPS Rewrites ON`.
+4. أضفها في Cloudflare DNS (Proxy **OFF** للتحقق الأول، ثم ON بعد نجاح التحقق).
+5. انتظر التحقق (عادة <5 دقائق) + شهادة TLS تلقائية من Vercel/Let's Encrypt.
 
 ## 3. إعادة التوجيه
 

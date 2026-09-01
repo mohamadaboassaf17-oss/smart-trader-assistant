@@ -218,6 +218,27 @@ export interface ExchangeRateEntry {
 
 export type ExchangeRateEntryInsert = Omit<ExchangeRateEntry, 'updatedAt'>;
 
+/** OCR draft — local-only, transient image + extracted draft (M9). */
+export type OcrDraftStatus = 'pending' | 'needs_review' | 'failed';
+
+export interface OcrDraft extends TBaseRow {
+  status: OcrDraftStatus;
+  /** Raw image bytes (transient — deleted after confirm). */
+  imageBlob?: Blob;
+  /** Base64 preview URL (object URL) for UI only, not persisted. */
+  previewUrl?: string;
+  /** Raw text from Vision TEXT_DETECTION. */
+  rawText?: string;
+  /** Confidence 0..1 (avg). */
+  confidence?: number;
+  /** Structured draft derived from Vision. */
+  draftAmountCents?: number;
+  draftCurrency?: CurrencyCode;
+  draftNote?: string;
+}
+
+export type OcrDraftInsert = Omit<OcrDraft, 'id' | 'createdAt' | 'updatedAt' | 'userId'>;
+
 /**
  * Sync queue item (AGENTS.md shape, extended with `nextAttemptAt` + `entityId`
  * for exponential backoff scheduling and stale-rejection bookkeeping).

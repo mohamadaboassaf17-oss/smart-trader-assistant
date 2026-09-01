@@ -14,9 +14,11 @@ import { useI18n } from 'vue-i18n';
 import DualCurrencyInput from '@/components/DualCurrencyInput.vue';
 import NumberInput from '@/components/NumberInput.vue';
 import SyncBadge from '@/components/SyncBadge.vue';
+import { useAuth } from '@/composables/useAuth';
 import { useExchangeRate } from '@/composables/useExchangeRate';
 import { useOfflineSync } from '@/composables/useOfflineSync';
 import { useToast } from '@/composables/useToast';
+import { saleInsertSchema } from '@/schemas';
 import { db } from '@/services/idb/db';
 import {
   getLatestRate,
@@ -39,7 +41,12 @@ const { t } = useI18n();
 const { save } = useOfflineSync();
 const toast = useToast();
 
-const localLabel = LOCAL_CURRENCY_LABEL[LOCAL_CURRENCY_BY_COUNTRY[DEFAULT_COUNTRY]];
+const { state: authState } = useAuth();
+const profileCountry = computed(() => authState.profile?.country ?? null);
+const localLabel = computed(
+  () =>
+    LOCAL_CURRENCY_LABEL[LOCAL_CURRENCY_BY_COUNTRY[authState.profile?.country ?? DEFAULT_COUNTRY]],
+);
 
 const today = todayIso();
 const selectedDate = ref(today);
@@ -54,7 +61,10 @@ const loadingDay = ref(false);
 const saving = ref(false);
 const savedTotalUsdCents = ref<number | null>(null);
 
-const exchangeRateComposable = useExchangeRate();
+const exchangeRateComposable = useExchangeRate(profileCountry);
+watch(profileCountry, () => {
+  void exchangeRateComposable.load();
+});
 
 const isEditing = computed(() => existingEntry.value !== null);
 
@@ -142,8 +152,9 @@ if (typeof performance !== 'undefined' && typeof performance.mark === 'function'
   performance.mark('sales-view-mounted');
   try {
     sessionStorage.setItem('sales-entry-start', String(Date.now()));
-  } catch {
-    /* ignore storage errors */
+  } catch (e) {
+    console.warn('[SalesView] storage failed', e);
+    toast.error(t('toasts.storageError'));
   }
 }
 
@@ -171,8 +182,7 @@ async function onSave(): Promise<void> {
       return;
     }
     const nowIso = new Date().toISOString();
-    // Editing reuses the same optimistic queue path — an upsert on the same
-    // id replaces the pending queue item (dedupe by [entity+entityId]).
+    // Central Zod validation before calculation (P1.5) — amount + rate
     const fields = {
       date: selectedDate.value,
       cashUsdCents: usdCents.value ?? 0,
@@ -180,6 +190,12 @@ async function onSave(): Promise<void> {
       exchangeRate: rate,
       totalUsdCents: dayTotalUsdCents(usdCents.value ?? 0, localCents.value ?? 0, rate),
     };
+    const saleParsed = saleInsertSchema.safeParse(fields);
+    if (!saleParsed.success) {
+      console.error('[sales] validation failed', saleParsed.error.issues);
+      toast.error(t('toasts.invalidAmount'));
+      return;
+    }
     const row: Sale = existingEntry.value
       ? { ...existingEntry.value, ...fields, updatedAt: nowIso }
       : { id: uuidv4(), createdAt: nowIso, updatedAt: nowIso, ...fields };
@@ -203,8 +219,9 @@ async function onSave(): Promise<void> {
           (
             window as unknown as { __SALES_ENTRY_DURATION_SEC?: number }
           ).__SALES_ENTRY_DURATION_SEC = durationSec;
-        } catch {
-          /* ignore */
+        } catch (e) {
+          console.warn('[SalesView] storage failed', e);
+          toast.error(t('toasts.storageError'));
         }
       }
       toast.success(t('toasts.savedLocally'));

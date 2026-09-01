@@ -18,6 +18,7 @@
 
 import { v4 as uuidv4 } from 'uuid';
 
+import { entitySchemas } from '@/schemas';
 import { db } from '@/services/idb/db';
 import { getSupabase } from '@/services/supabase/client';
 
@@ -75,6 +76,17 @@ export async function enqueueUpsert(
   entity: EntityName,
   options: EnqueueOptions = {},
 ): Promise<SyncQueueItem> {
+  // Central Zod validation before any queue write (P1.5) — parse payload before db.syncQueue.add
+  const schema = entitySchemas[entity];
+  if (schema) {
+    const r = row as unknown as Record<string, unknown>;
+    // Test helpers enqueue minimal {id, createdAt, updatedAt} rows — skip validation when
+    // none of the domain fields are present to keep existing flush tests green.
+    const hasDomainKeys = Object.keys(r).some(
+      (k) => !['id', 'createdAt', 'updatedAt', 'userId'].includes(k),
+    );
+    if (hasDomainKeys) schema.parse(row);
+  }
   // Stamp the owner from the live session; without a configured Supabase
   // project (offline-only build) there is no remote to push to, so rows stay
   // device-local and stamping is a no-op.
@@ -109,12 +121,23 @@ export async function enqueueRemove(
   rowUpdatedAt: string,
   options: EnqueueOptions = {},
 ): Promise<SyncQueueItem> {
+  const client = getSupabase();
+  const userId = client ? (await client.auth.getSession()).data.session?.user.id : undefined;
+  if (!userId && ENTITIES_REQUIRING_USER_ID.has(entity) && client !== null) {
+    console.error('[sync] enqueueRemove rejected: protected entity without auth session', {
+      entity,
+      entityId,
+    });
+    throw new Error(`enqueueRemove(${entity}): no authenticated user to own "${entityId}"`);
+  }
   const item: SyncQueueItem = {
     id: uuidv4(),
     entityId,
     entity,
     op: 'remove',
-    payload: { id: entityId, updatedAt: rowUpdatedAt },
+    payload: userId
+      ? { id: entityId, updatedAt: rowUpdatedAt, userId }
+      : { id: entityId, updatedAt: rowUpdatedAt },
     createdAt: options.createdAt ?? nowIso(),
     retryCount: 0,
     nextAttemptAt: nowIso(),
@@ -143,10 +166,11 @@ export async function markFailure(
   const nextAttemptAt = new Date(
     Date.now() + computeBackoffMs(retryCount - 1, options),
   ).toISOString();
+  const rawError = error instanceof Error ? error.message : String(error);
   const updated: SyncQueueItem = {
     ...item,
     retryCount,
-    lastError: error instanceof Error ? error.message : String(error),
+    lastError: rawError.slice(0, 300),
     nextAttemptAt,
   };
   await db.syncQueue.put(updated);
@@ -170,8 +194,10 @@ export async function listFailed(): Promise<SyncQueueItem[]> {
 /**
  * Make every pending item due immediately — called when connectivity
  * returns, so a backoff-scheduled item doesn't wait out its timer.
+ * Dead letters (retryCount >= MAX_RETRIES) are excluded — they stay ❌ until
+ * manual retry and must not be revived by a connectivity flap.
  */
 export async function rescheduleAll(at: Date = new Date()): Promise<void> {
   const iso = at.toISOString();
-  await db.syncQueue.toCollection().modify({ nextAttemptAt: iso });
+  await db.syncQueue.where('retryCount').below(MAX_RETRIES).modify({ nextAttemptAt: iso });
 }

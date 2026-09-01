@@ -22,6 +22,7 @@ import type {
   InventoryMove,
   Obligation,
   ObligationPayment,
+  OcrDraft,
   Product,
   Profile,
   Sale,
@@ -32,7 +33,7 @@ import type {
 } from '@/types/domain';
 
 export const DB_NAME = 'trader-assistant';
-export const DB_VERSION = 1;
+export const DB_VERSION = 3;
 
 /** Typed handle for every object store in the database. */
 export class TraderDb extends Dexie {
@@ -50,10 +51,11 @@ export class TraderDb extends Dexie {
   syncQueue!: Table<SyncQueueItem, string>;
   session!: Table<SessionRecord, string>;
   exchangeRates!: Table<ExchangeRateEntry, string>;
+  ocrDraft!: Table<OcrDraft, string>;
 
   constructor() {
     super(DB_NAME);
-    this.version(DB_VERSION).stores({
+    this.version(1).stores({
       sale: 'id, userId, date, updatedAt',
       sidePurchase: 'id, userId, date, updatedAt',
       dailyNote: 'id, userId, date, updatedAt',
@@ -71,6 +73,16 @@ export class TraderDb extends Dexie {
       session: 'key',
       // updatedAt indexed for getLatestRate() (orderBy needs an index).
       exchangeRates: 'date, updatedAt',
+    });
+    this.version(2).stores({
+      ocrDraft: 'id, userId, status, updatedAt',
+    });
+    this.version(3).stores({
+      supplier: 'id, userId, name, updatedAt',
+      product: 'id, userId, name, updatedAt',
+      goodsInvoice: 'id, userId, supplierId, [userId+supplierId], date, updatedAt',
+      inventoryMove: 'id, userId, productId, [userId+productId], direction, updatedAt',
+      obligationPayment: 'id, userId, obligationId, [userId+obligationId], month, status, updatedAt',
     });
   }
 }

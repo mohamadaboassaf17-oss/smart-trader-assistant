@@ -1,4 +1,5 @@
 import js from '@eslint/js'
+import security from 'eslint-plugin-security'
 import tseslint from 'typescript-eslint'
 import vue from 'eslint-plugin-vue'
 import importX from 'eslint-plugin-import-x'
@@ -44,6 +45,19 @@ export default tseslint.config(
         typescript: { project: './tsconfig.app.json' },
         node: true,
       },
+    },
+  },
+  security.configs.recommended,
+  {
+    rules: {
+      'security/detect-object-injection': 'off',
+      // compat: eslint-plugin-security 3.0.1 uses context.getSourceCode() removed in ESLint 9+
+      'security/detect-child-process': 'off',
+      'security/detect-no-csrf-before-method-override': 'off',
+      'security/detect-non-literal-fs-filename': 'off',
+      'security/detect-non-literal-regexp': 'off',
+      'security/detect-non-literal-require': 'off',
+      'security/detect-unsafe-regex': 'off',
     },
   },
   prettier,

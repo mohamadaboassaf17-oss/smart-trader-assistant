@@ -140,10 +140,10 @@ export async function restoreSession(): Promise<User | null> {
   try {
     const { data } = await client.auth.getSession();
     return data.session?.user ?? null;
-  } catch {
+  } catch (e) {
     // Expired token + offline → treat as signed out locally; the next
     // online sync cycle can re-restore once refresh succeeds.
-    console.warn('[auth] session restore failed (offline or invalid)');
+    console.warn('[auth] session restore failed (offline or invalid)', e);
     return null;
   }
 }
